@@ -1,0 +1,3 @@
+[submodule "source/libmobile"]
+	path = source/libmobile
+	url = ../libmobile

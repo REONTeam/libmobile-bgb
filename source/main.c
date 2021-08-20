@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
