@@ -234,7 +234,7 @@ bool mobile_board_sock_accept(void *user, unsigned conn)
     return true;
 }
 
-bool mobile_board_sock_send(void *user, unsigned conn, const void *data, const unsigned size, const struct mobile_addr *addr)
+int mobile_board_sock_send(void *user, unsigned conn, const void *data, const unsigned size, const struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -243,17 +243,16 @@ bool mobile_board_sock_send(void *user, unsigned conn, const void *data, const u
     socklen_t sock_addrlen;
     struct sockaddr *sock_addr = convert_sockaddr(&sock_addrlen, &u_addr, addr);
 
-    if (sendto(sock, data, size, 0, sock_addr, sock_addrlen) == -1) {
+    ssize_t len = sendto(sock, data, size, 0, sock_addr, sock_addrlen);
+    if (len == -1) {
+        // If the socket is blocking, we just haven't sent anything
         int err = socket_geterror();
-        if (err == SOCKET_EWOULDBLOCK) {
-            // TODO: Nonblocking
-            return false;
-        }
+        if (err == SOCKET_EWOULDBLOCK || err == SOCKET_EAGAIN) return 0;
 
         socket_perror("send");
-        return false;
+        return -1;
     }
-    return true;
+    return len;
 }
 
 int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
@@ -261,27 +260,43 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
 
+    // Make sure at least one byte is in the buffer
     if (socket_hasdata(sock, 0) <= 0) return 0;
 
     union u_sockaddr u_addr = {0};
     socklen_t sock_addrlen = sizeof(u_addr);
     struct sockaddr *sock_addr = (struct sockaddr *)&u_addr;
 
-    ssize_t len;
-
-    if (!data) {
+    ssize_t len = 0;
+    if (data) {
+        // Retrieve at least 1 byte from the buffer
+        len = recvfrom(sock, data, size, 0, sock_addr, &sock_addrlen);
+    } else {
         // Check if at least 1 byte is available in buffer
         char c;
         len = recvfrom(sock, &c, 1, MSG_PEEK, sock_addr, &sock_addrlen);
-        if (len == -1) socket_perror("recv");
-        if (len <= 0) return -1;
-        return 0;
+    }
+    if (len == -1) {
+        // If the socket is blocking, we just haven't received anything
+        // Though this shouldn't happen thanks to the socket_hasdata check.
+        int err = socket_geterror();
+        if (err == SOCKET_EWOULDBLOCK || err == SOCKET_EAGAIN) return 0;
+
+        socket_perror("recv");
+        return -1;
     }
 
-    // Retrieve at least 1 byte from the buffer
-    len = recvfrom(sock, data, size, 0, sock_addr, &sock_addrlen);
-    if (len == -1) socket_perror("recv");
-    if (len <= 0) return -1;
+    // A length of 0 will be returned if the remote has disconnected.
+    if (len == 0) {
+        // Though it's only relevant to TCP sockets, as UDP sockets may receive
+        // zero-length datagrams.
+        int sock_type = 0;
+        socklen_t sock_type_len = sizeof(sock_type);
+        getsockopt(sock, SOL_SOCKET, SO_TYPE, &sock_type, &sock_type_len);
+        if (sock_type == SOCK_STREAM) return -2;
+    }
+
+    if (!data) return 0;
 
     if (addr && sock_addrlen) {
         if (sock_addr->sa_family == AF_INET) {
