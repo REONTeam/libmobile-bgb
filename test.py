@@ -321,8 +321,8 @@ class SimpleServer():
 
 if __name__ == "__main__":
     b = BGBMaster()
-    # s = subprocess.Popen(["./mobile"])
-    s = subprocess.Popen(["wine", "./mobile.exe"])
+    s = subprocess.Popen(["./mobile"])
+    # s = subprocess.Popen(["wine", "./mobile.exe"])
     # s = subprocess.Popen(["valgrind", "--leak-check=full", "--show-leak-kinds=all", "./mobile"])
     b.accept()
 

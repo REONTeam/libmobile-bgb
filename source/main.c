@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
 #include <locale.h>
 #include <pthread.h>
 #include "libmobile/mobile.h"
@@ -98,7 +99,7 @@ bool mobile_board_time_check_ms(void *user, enum mobile_timers timer, unsigned m
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     bool ret = (
-        (mobile->bgb_clock - mobile->bgb_clock_latch[timer]) & 0x7FFFFFFF) >
+        (mobile->bgb_clock - mobile->bgb_clock_latch[timer]) & 0x7FFFFFFF) >=
         (uint32_t)((double)ms * (1 << 21) / 1000);
     return ret;
 }
@@ -106,6 +107,7 @@ bool mobile_board_time_check_ms(void *user, enum mobile_timers timer, unsigned m
 bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype socktype, enum mobile_addrtype addrtype, unsigned bindport)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
+    assert(mobile->sockets[conn] == -1);
 
     int sock_socktype;
     switch (socktype) {
@@ -162,6 +164,7 @@ bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype sock
 void mobile_board_sock_close(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
+    assert(mobile->sockets[conn] != -1);
     socket_close(mobile->sockets[conn]);
     mobile->sockets[conn] = -1;
 }
@@ -169,7 +172,6 @@ void mobile_board_sock_close(void *user, unsigned conn)
 int mobile_board_sock_connect(void *user, unsigned conn, const struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-
     int sock = mobile->sockets[conn];
 
     union u_sockaddr u_addr;
@@ -198,20 +200,16 @@ int mobile_board_sock_connect(void *user, unsigned conn, const struct mobile_add
     fprintf(stderr, "Could not connect (ip %s port %s):",
         sock_host, sock_port);
     socket_perror(NULL);
-    socket_close(sock);
-    mobile->sockets[conn] = -1;
     return -1;
 }
 
 bool mobile_board_sock_listen(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-
     int sock = mobile->sockets[conn];
+
     if (listen(sock, 1) == -1) {
         socket_perror("listen");
-        socket_close(sock);
-        mobile->sockets[conn] = -1;
         return false;
     }
 
@@ -221,25 +219,37 @@ bool mobile_board_sock_listen(void *user, unsigned conn)
 bool mobile_board_sock_accept(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    if (socket_hasdata(mobile->sockets[conn], 1000) <= 0) return false;
-    int sock = accept(mobile->sockets[conn], NULL, NULL);
-    if (sock == -1) {
+    int sock = mobile->sockets[conn];
+
+    if (socket_hasdata(sock, 1000) <= 0) return false;
+    int newsock = accept(sock, NULL, NULL);
+    if (newsock == -1) {
         socket_perror("accept");
         return false;
     }
-    socket_close(mobile->sockets[conn]);
-    mobile->sockets[conn] = sock;
+    if (socket_setblocking(newsock, 0) == -1) return false;
+
+    socket_close(sock);
+    mobile->sockets[conn] = newsock;
     return true;
 }
 
 bool mobile_board_sock_send(void *user, unsigned conn, const void *data, const unsigned size, const struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
+    int sock = mobile->sockets[conn];
 
     union u_sockaddr u_addr;
     socklen_t sock_addrlen;
     struct sockaddr *sock_addr = convert_sockaddr(&sock_addrlen, &u_addr, addr);
-    if (sendto(mobile->sockets[conn], data, size, 0, sock_addr, sock_addrlen) == -1) {
+
+    if (sendto(sock, data, size, 0, sock_addr, sock_addrlen) == -1) {
+        int err = socket_geterror();
+        if (err == SOCKET_EWOULDBLOCK) {
+            // TODO: Nonblocking
+            return false;
+        }
+
         socket_perror("send");
         return false;
     }
@@ -249,25 +259,31 @@ bool mobile_board_sock_send(void *user, unsigned conn, const void *data, const u
 int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
+    int sock = mobile->sockets[conn];
 
-    if (socket_hasdata(mobile->sockets[conn], 0) <= 0) return 0;
+    if (socket_hasdata(sock, 0) <= 0) return 0;
 
-    union u_sockaddr u_addr;
+    union u_sockaddr u_addr = {0};
     socklen_t sock_addrlen = sizeof(u_addr);
     struct sockaddr *sock_addr = (struct sockaddr *)&u_addr;
 
     ssize_t len;
-    if (data) {
-        len = recvfrom(mobile->sockets[conn], data, size, 0, sock_addr,
-            &sock_addrlen);
-        if (len == 0) return -1;
-    } else {
+
+    if (!data) {
+        // Check if at least 1 byte is available in buffer
         char c;
-        len = recvfrom(mobile->sockets[conn], &c, 1, MSG_PEEK, sock_addr,
-            &sock_addrlen);
-        if (len >= 0) len = 0;
+        len = recvfrom(sock, &c, 1, MSG_PEEK, sock_addr, &sock_addrlen);
+        if (len == -1) socket_perror("recv");
+        if (len <= 0) return -1;
+        return 0;
     }
-    if (addr) {
+
+    // Retrieve at least 1 byte from the buffer
+    len = recvfrom(sock, data, size, 0, sock_addr, &sock_addrlen);
+    if (len == -1) socket_perror("recv");
+    if (len <= 0) return -1;
+
+    if (addr && sock_addrlen) {
         if (sock_addr->sa_family == AF_INET) {
             struct mobile_addr4 *addr4 = (struct mobile_addr4 *)addr;
             addr4->type = MOBILE_ADDRTYPE_IPV4;
@@ -282,7 +298,7 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
                 sizeof(addr6->host));
         }
     }
-    if (len == -1) socket_perror("recv");
+
     return len;
 }
 
@@ -368,6 +384,20 @@ void show_help(void)
     exit(EXIT_FAILURE);
 }
 
+void show_help_full(void)
+{
+    fprintf(stderr, "%s [-h] [-c config] [host [port]]\n", program_name);
+    fprintf(stderr,
+        "\n"
+        "-h|--help           Show this help\n"
+        "-c|--config config  Config file path\n"
+        "--p2p_port port     Port to use for p2p communications\n"
+        "--device device     Adapter to emulate\n"
+        "--unmetered         Signal unmetered communications to Pokémon\n"
+    );
+    exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char *argv[])
 {
     program_name = argv[0];
@@ -385,7 +415,7 @@ int main(int argc, char *argv[])
         if ((*argv)[0] != '-' || strcmp(*argv, "--") == 0) {
             break;
         } else if (strcmp(*argv, "-h") == 0 || strcmp(*argv, "--help") == 0) {
-            show_help();
+            show_help_full();
         } else if (strcmp(*argv, "-c") == 0 || strcmp(*argv, "--config") == 0) {
             if (!argv[1]) {
                 fprintf(stderr, "Missing parameter: %s\n", argv[0]);
