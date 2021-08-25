@@ -293,7 +293,8 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
         // zero-length datagrams.
         int sock_type = 0;
         socklen_t sock_type_len = sizeof(sock_type);
-        getsockopt(sock, SOL_SOCKET, SO_TYPE, &sock_type, &sock_type_len);
+        getsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&sock_type,
+            &sock_type_len);
         if (sock_type == SOCK_STREAM) return -2;
     }
 

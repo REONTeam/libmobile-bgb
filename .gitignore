@@ -3,3 +3,5 @@
 /mobile
 /mobile.exe
 /config.bin
+/releng/musl/
+/releng/winxp-pthreads/
