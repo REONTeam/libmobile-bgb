@@ -46,4 +46,4 @@ $(dir_build)/%.o: $(dir_source)/%.c | $$(dir $$@)
 %/:
 	mkdir -p $@
 
--include $(patsubst %.o, %.d, $(objects))
+-include $(objects:.o=.d)

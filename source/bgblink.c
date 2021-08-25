@@ -20,13 +20,13 @@ enum bgb_cmd {
     BGB_CMD_WANTDISCONNECT
 };
 
-A_PACKED(struct bgb_packet) {
+A_PACKED(struct bgb_packet {
     unsigned char cmd;
     unsigned char b2;
     unsigned char b3;
     unsigned char b4;
     uint32_t timestamp;
-};
+});
 
 static const struct bgb_packet handshake = {
     .cmd = BGB_CMD_VERSION,

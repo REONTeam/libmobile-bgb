@@ -246,7 +246,7 @@ class Mobile():
         }
 
     def cmd_isp_login(self, s_id="nozomi", s_pass="wahaha1",
-            dns1=(127,0,0,1), dns2=(127,0,0,1)):
+            dns1=(0,0,0,0), dns2=(0,0,0,0)):
         data = ([len(s_id)] + list(s_id.encode()) +
                 [len(s_pass)] + list(s_pass.encode()) +
                 list(dns1) + list(dns2))
@@ -321,7 +321,7 @@ class SimpleServer():
 
 if __name__ == "__main__":
     b = BGBMaster()
-    s = subprocess.Popen(["./mobile"])
+    s = subprocess.Popen(["./mobile", "--dns1", "127.0.0.2", "--dns2", "::1"])
     # s = subprocess.Popen(["wine", "./mobile.exe"])
     # s = subprocess.Popen(["valgrind", "--leak-check=full", "--show-leak-kinds=all", "./mobile"])
     b.accept()
@@ -386,8 +386,11 @@ if __name__ == "__main__":
     # DNS Query
     m.cmd_begin_session()
     m.cmd_dial_telephone("0755311973")
-    m.cmd_isp_login()
+    print(m.cmd_isp_login())
     print(m.cmd_dns_query("example.com"))
+    print(m.cmd_dns_query("example.org"))
+    print(m.cmd_dns_query("003.4.089.123"))
+    print(m.cmd_dns_query("000000..."))
     m.cmd_isp_logout()
     m.cmd_hang_up_telephone()
     m.cmd_end_session()

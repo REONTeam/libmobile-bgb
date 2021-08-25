@@ -10,6 +10,7 @@
 #include <locale.h>
 #include <pthread.h>
 #include "libmobile/mobile.h"
+#include "libmobile/inet_pton.h"
 
 #include "socket.h"
 #include "bgblink.h"
@@ -402,15 +403,48 @@ void show_help(void)
 void show_help_full(void)
 {
     fprintf(stderr, "%s [-h] [-c config] [host [port]]\n", program_name);
-    fprintf(stderr,
-        "\n"
+    fprintf(stderr, "\n"
         "-h|--help           Show this help\n"
         "-c|--config config  Config file path\n"
+        "--dns1 addr         Set DNS1 address override\n"
+        "--dns2 addr         Set DNS2 address override\n"
         "--p2p_port port     Port to use for p2p communications\n"
         "--device device     Adapter to emulate\n"
         "--unmetered         Signal unmetered communications to Pokémon\n"
     );
     exit(EXIT_SUCCESS);
+}
+
+void main_checkparam(char *argv[])
+{
+    if (!argv[1]) {
+        fprintf(stderr, "Missing parameter: %s\n", argv[0]);
+        show_help();
+    }
+}
+
+void main_parse_addr(struct mobile_addr *dest, char *argv[])
+{
+    unsigned char ip[MOBILE_PTON_MAXLEN];
+    int rc = mobile_pton(MOBILE_PTON_ANY, argv[1], ip);
+
+    struct mobile_addr4 *dest4 = (struct mobile_addr4 *)dest;
+    struct mobile_addr6 *dest6 = (struct mobile_addr6 *)dest;
+    switch (rc) {
+    case MOBILE_PTON_IPV4:
+        dest4->type = MOBILE_ADDRTYPE_IPV4;
+        dest4->port = MOBILE_DNS_PORT;
+        memcpy(dest4->host, ip, sizeof(dest4->host));
+        break;
+    case MOBILE_PTON_IPV6:
+        dest6->type = MOBILE_ADDRTYPE_IPV6;
+        dest6->port = MOBILE_DNS_PORT;
+        memcpy(dest6->host, ip, sizeof(dest6->host));
+        break;
+    default:
+        fprintf(stderr, "Invalid parameter for %s: %s\n", argv[0], argv[1]);
+        show_help();
+    }
 }
 
 int main(int argc, char *argv[])
@@ -432,24 +466,23 @@ int main(int argc, char *argv[])
         } else if (strcmp(*argv, "-h") == 0 || strcmp(*argv, "--help") == 0) {
             show_help_full();
         } else if (strcmp(*argv, "-c") == 0 || strcmp(*argv, "--config") == 0) {
-            if (!argv[1]) {
-                fprintf(stderr, "Missing parameter: %s\n", argv[0]);
-                show_help();
-            }
+            main_checkparam(argv);
             fname_config = argv[1];
             argv += 1;
+        } else if (strcmp(*argv, "--dns1") == 0) {
+            main_checkparam(argv);
+            main_parse_addr(&adapter_config.dns1, argv);
+            argv += 1;
+        } else if (strcmp(*argv, "--dns2") == 0) {
+            main_checkparam(argv);
+            main_parse_addr(&adapter_config.dns2, argv);
+            argv += 1;
         } else if (strcmp(*argv, "--p2p_port") == 0) {
-            if (!argv[1]) {
-                fprintf(stderr, "Missing parameter: %s\n", argv[0]);
-                show_help();
-            }
+            main_checkparam(argv);
             adapter_config.p2p_port = strtol(argv[1], NULL, 0);
             argv += 1;
         } else if (strcmp(*argv, "--device") == 0) {
-            if (!argv[1]) {
-                fprintf(stderr, "Missing parameter: %s\n", argv[0]);
-                show_help();
-            }
+            main_checkparam(argv);
             adapter_config.device = strtol(argv[1], NULL, 0);
             argv += 1;
         } else if (strcmp(*argv, "--unmetered") == 0) {
