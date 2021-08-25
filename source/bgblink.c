@@ -102,6 +102,11 @@ void bgb_loop(int socket, unsigned char (*callback_transfer)(void *, unsigned ch
             if (!bgb_write(socket, &packet)) return;
             break;
 
+        case BGB_CMD_SYNC2:
+            // Can be sent if the game has queued up a byte to send as slave...
+            // Not necessary to reply.
+            break;
+
         case BGB_CMD_SYNC3:
             if (packet.b2 != 0) break;
             if (callback_timestamp) callback_timestamp(user, packet.timestamp);
