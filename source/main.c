@@ -129,7 +129,10 @@ bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype sock
         socket_perror("socket");
         return false;
     }
-    if (socket_setblocking(sock, 0) == -1) return false;
+    if (socket_setblocking(sock, 0) == -1) {
+        socket_close(sock);
+        return false;
+    }
 
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
             (char *)&(int){1}, sizeof(int)) == -1) {
