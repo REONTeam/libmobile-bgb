@@ -37,31 +37,33 @@ union u_sockaddr {
 
 static struct sockaddr *convert_sockaddr(socklen_t *addrlen, union u_sockaddr *u_addr, const struct mobile_addr *addr)
 {
-    *addrlen = 0;
-    struct sockaddr *res = NULL;
-    if (!addr) return res;
-    if (addr->type == MOBILE_ADDRTYPE_IPV4) {
+    if (!addr) {
+        *addrlen = 0;
+        return NULL;
+    } else if (addr->type == MOBILE_ADDRTYPE_IPV4) {
         struct mobile_addr4 *addr4 = (struct mobile_addr4 *)addr;
         memset(&u_addr->addr4, 0, sizeof(u_addr->addr4));
         u_addr->addr4.sin_family = AF_INET;
         u_addr->addr4.sin_port = htons(addr4->port);
-        if (sizeof(struct in_addr) != sizeof(addr4->host)) return res;
+        if (sizeof(struct in_addr) != sizeof(addr4->host)) return NULL;
         memcpy(&u_addr->addr4.sin_addr.s_addr, addr4->host,
             sizeof(struct in_addr));
         *addrlen = sizeof(struct sockaddr_in);
-        res = &u_addr->addr;
+        return &u_addr->addr;
     } else if (addr->type == MOBILE_ADDRTYPE_IPV6) {
         struct mobile_addr6 *addr6 = (struct mobile_addr6 *)addr;
         memset(&u_addr->addr6, 0, sizeof(u_addr->addr6));
         u_addr->addr6.sin6_family = AF_INET6;
         u_addr->addr6.sin6_port = htons(addr6->port);
-        if (sizeof(struct in6_addr) != sizeof(addr6->host)) return res;
+        if (sizeof(struct in6_addr) != sizeof(addr6->host)) return NULL;
         memcpy(&u_addr->addr6.sin6_addr.s6_addr, addr6->host,
             sizeof(struct in6_addr));
         *addrlen = sizeof(struct sockaddr_in6);
-        res = &u_addr->addr;
+        return &u_addr->addr;
+    } else {
+        *addrlen = 0;
+        return NULL;
     }
-    return res;
 }
 
 void mobile_board_serial_disable(void *user)
@@ -99,10 +101,9 @@ void mobile_board_time_latch(void *user, enum mobile_timers timer)
 bool mobile_board_time_check_ms(void *user, enum mobile_timers timer, unsigned ms)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    bool ret = (
-        (mobile->bgb_clock - mobile->bgb_clock_latch[timer]) & 0x7FFFFFFF) >=
+    return
+        ((mobile->bgb_clock - mobile->bgb_clock_latch[timer]) & 0x7FFFFFFF) >=
         (uint32_t)((double)ms * (1 << 21) / 1000);
-    return ret;
 }
 
 bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype socktype, enum mobile_addrtype addrtype, unsigned bindport)
@@ -322,19 +323,18 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
     return len;
 }
 
-static void filter_useless_actions(enum mobile_action *action)
+static enum mobile_action filter_actions(enum mobile_action action)
 {
     // Turns actions that aren't relevant to the emulator into
     //   MOBILE_ACTION_NONE
 
-    switch (*action) {
+    switch (action) {
     // In an emulator, serial can't desync
     case MOBILE_ACTION_RESET_SERIAL:
-        *action = MOBILE_ACTION_NONE;
-        break;
+        return MOBILE_ACTION_NONE;
 
     default:
-        break;
+        return action;
     }
 }
 
@@ -351,8 +351,8 @@ void *thread_mobile_loop(void *user)
             mobile_action_process(&mobile->adapter, mobile->action);
             fflush(stdout);
 
-            mobile->action = mobile_action_get(&mobile->adapter);
-            filter_useless_actions(&mobile->action);
+            mobile->action = filter_actions(
+                    mobile_action_get(&mobile->adapter));
         }
     }
     pthread_mutex_unlock(&mobile->mutex_cond);
@@ -366,8 +366,8 @@ void bgb_loop_action(struct mobile_user *mobile)
     // If the thread isn't doing anything, queue up the next action.
     if (pthread_mutex_trylock(&mobile->mutex_cond) != 0) return;
     if (mobile->action == MOBILE_ACTION_NONE) {
-        enum mobile_action action = mobile_action_get(&mobile->adapter);
-        filter_useless_actions(&action);
+        enum mobile_action action = filter_actions(
+                mobile_action_get(&mobile->adapter));
 
         if (action != MOBILE_ACTION_NONE) {
             mobile->action = action;

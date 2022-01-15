@@ -4,10 +4,9 @@
 #include <unistd.h>
 
 #if defined(__unix__)
-#include <arpa/inet.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <sys/socket.h>
 #elif defined(__WIN32__)
 #define UNICODE
 #include <winsock2.h>

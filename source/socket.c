@@ -7,6 +7,7 @@
 #include <sys/time.h>
 
 #if defined(__unix__)
+#include <arpa/inet.h>
 #include <poll.h>
 #include <fcntl.h>
 #include <netdb.h>
