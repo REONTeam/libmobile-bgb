@@ -396,9 +396,12 @@ void bgb_loop_timestamp(void *user, uint32_t t)
     // Attempt to detect the clock going back in time
     // This is probably a BGB bug, caused by enabling some options, such as
     //   the "break on ld d,d" option.
-    if (((mobile->bgb_clock - t) & 0x7FFFFFFF) < 0x100) {
-        fprintf(stderr, "[BUG] Emulator went back in time? "
-                "old: 0x%08X; new: 0x%08X\n", mobile->bgb_clock, t);
+    uint32_t diff = (mobile->bgb_clock - t) & 0x7FFFFFFF;
+    if (diff < 0x100) {
+        if (diff != 0) {
+            fprintf(stderr, "[BUG] Emulator went back in time? "
+                    "old: 0x%08X; new: 0x%08X\n", mobile->bgb_clock, t);
+        }
         return;
     }
 
