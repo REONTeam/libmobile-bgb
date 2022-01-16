@@ -367,21 +367,29 @@ if __name__ == "__main__":
     m.cmd_end_session()
 
     # TCP connection
-    m.cmd_begin_session()
-    m.cmd_dial_telephone("0755311973")
-    m.cmd_isp_login()
-    t = SimpleServer("127.0.0.1", 8766)
-    c = m.cmd_open_tcp_connection((127,0,0,1), 8766)
-    t.accept()
-    m.cmd_transfer_data(c, "Hello World!")
-    t.send(t.recv(1024))
-    t.close()
-    m.cmd_transfer_data(c)
-    m.cmd_transfer_data(c)
-    m.cmd_close_tcp_connection(c)
-    m.cmd_isp_logout()
-    m.cmd_hang_up_telephone()
-    m.cmd_end_session()
+    for x in range(2):
+        m.cmd_begin_session()
+        m.cmd_dial_telephone("0755311973")
+        m.cmd_isp_login()
+
+        t = SimpleServer("127.0.0.1", 8766)
+        c = m.cmd_open_tcp_connection((127,0,0,1), 8766)
+        t.accept()
+        m.cmd_transfer_data(c, "Hello World!")
+        t.send(t.recv(1024))
+        t.close()
+        m.cmd_transfer_data(c)
+
+        t2 = SimpleServer("127.0.0.1", 8767)
+        c2 = m.cmd_open_tcp_connection((127,0,0,1), 8767)
+        t2.accept()
+        m.cmd_transfer_data(c2, "Hello World!")
+        t2.send(t2.recv(1024))
+        t2.close()
+        m.cmd_transfer_data(c2)
+
+        m.cmd_transfer_data(c)
+        m.cmd_end_session()
 
     # DNS Query
     m.cmd_begin_session()
