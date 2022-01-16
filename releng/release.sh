@@ -15,7 +15,11 @@ make_musl() {
     make -C .. "$@"
 }
 
-make_musl clean
-make_musl
-make_mingw clean
-make_mingw
+if [ -f musl/bin/musl-gcc ]; then
+    make_musl clean
+    make_musl optim
+fi
+if command -v x86_64-w64-mingw32-gcc 2> /dev/null; then
+    make_mingw clean
+    make_mingw optim
+fi
