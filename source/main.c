@@ -15,8 +15,6 @@
 #include "socket.h"
 #include "bgblink.h"
 
-#include "libmobile/debug_cmd.h"
-
 struct mobile_user {
     pthread_mutex_t mutex_serial;
     pthread_mutex_t mutex_cond;
@@ -64,6 +62,12 @@ static struct sockaddr *convert_sockaddr(socklen_t *addrlen, union u_sockaddr *u
         *addrlen = 0;
         return NULL;
     }
+}
+
+void mobile_board_debug_log(void *user, const char *line)
+{
+    (void)user;
+    fprintf(stderr, "%s\n", line);
 }
 
 void mobile_board_serial_disable(void *user)
