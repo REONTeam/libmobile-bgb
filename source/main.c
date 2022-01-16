@@ -478,7 +478,10 @@ int main(int argc, char *argv[])
 
     (void)argc;
     while (*++argv) {
-        if ((*argv)[0] != '-' || strcmp(*argv, "--") == 0) {
+        if ((*argv)[0] != '-') {
+            break;
+        } else if (strcmp(*argv, "--") == 0) {
+            argv += 1;
             break;
         } else if (strcmp(*argv, "-h") == 0 || strcmp(*argv, "--help") == 0) {
             show_help_full();
