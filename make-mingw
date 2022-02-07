@@ -4,4 +4,4 @@ STRIP="${STRIP:-x86_64-w64-mingw32-strip}" \
 LDFLAGS="-static $LDFLAGS" \
 LDLIBS="-lws2_32 $LDLIBS" \
 CFLAGS="-Wno-format $CFLAGS" \
-    exec make dir_build=build.exe name=mobile.exe "$@"
+    exec "${MAKE:-make}" dir_build=build.exe name=mobile.exe "$@"

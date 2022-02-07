@@ -39,7 +39,7 @@ static struct sockaddr *convert_sockaddr(socklen_t *addrlen, union u_sockaddr *u
         *addrlen = 0;
         return NULL;
     } else if (addr->type == MOBILE_ADDRTYPE_IPV4) {
-        struct mobile_addr4 *addr4 = (struct mobile_addr4 *)addr;
+        const struct mobile_addr4 *addr4 = (struct mobile_addr4 *)addr;
         memset(&u_addr->addr4, 0, sizeof(u_addr->addr4));
         u_addr->addr4.sin_family = AF_INET;
         u_addr->addr4.sin_port = htons(addr4->port);
@@ -49,7 +49,7 @@ static struct sockaddr *convert_sockaddr(socklen_t *addrlen, union u_sockaddr *u
         *addrlen = sizeof(struct sockaddr_in);
         return &u_addr->addr;
     } else if (addr->type == MOBILE_ADDRTYPE_IPV6) {
-        struct mobile_addr6 *addr6 = (struct mobile_addr6 *)addr;
+        const struct mobile_addr6 *addr6 = (struct mobile_addr6 *)addr;
         memset(&u_addr->addr6, 0, sizeof(u_addr->addr6));
         u_addr->addr6.sin6_family = AF_INET6;
         u_addr->addr6.sin6_port = htons(addr6->port);
@@ -139,7 +139,16 @@ bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype sock
         return false;
     }
 
+    // Set SO_REUSEADDR so that we can bind to the same port again after
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
+            (char *)&(int){1}, sizeof(int)) == -1) {
+        socket_perror("setsockopt");
+        socket_close(sock);
+        return false;
+    }
+
+    // Set TCP_NODELAY to aid sending packets inmediately, reducing latency
+    if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
             (char *)&(int){1}, sizeof(int)) == -1) {
         socket_perror("setsockopt");
         socket_close(sock);
@@ -396,19 +405,6 @@ void bgb_loop_timestamp(void *user, uint32_t t)
 {
     // Update the timestamp sent by the emulator
     struct mobile_user *mobile = (struct mobile_user *)user;
-
-    // Attempt to detect the clock going back in time
-    // This is probably a BGB bug, caused by enabling some options, such as
-    //   the "break on ld d,d" option.
-    uint32_t diff = (mobile->bgb_clock - t) & 0x7FFFFFFF;
-    if (diff < 0x100) {
-        if (diff != 0) {
-            fprintf(stderr, "[BUG] Emulator went back in time? "
-                    "old: 0x%08X; new: 0x%08X\n", mobile->bgb_clock, t);
-        }
-        return;
-    }
-
     mobile->bgb_clock = t;
     bgb_loop_action(mobile);
 }
@@ -549,8 +545,8 @@ int main(int argc, char *argv[])
         socket_perror(NULL);
         return EXIT_FAILURE;
     }
-
-    if (setsockopt(bgb_sock, IPPROTO_TCP, TCP_NODELAY, (void *)&(int){1}, sizeof(int)) == -1) {
+    if (setsockopt(bgb_sock, IPPROTO_TCP, TCP_NODELAY,
+            (void *)&(int){1}, sizeof(int)) == -1) {
         socket_perror("setsockopt");
         return EXIT_FAILURE;
     }
