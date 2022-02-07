@@ -366,6 +366,10 @@ void *thread_mobile_loop(void *user)
 
             mobile->action = filter_actions(
                     mobile_action_get(&mobile->adapter));
+            if (mobile->action != MOBILE_ACTION_NONE) {
+                // Sleep 10ms to avoid busylooping too hard
+                nanosleep(&(struct timespec){.tv_nsec = 10000000}, NULL);
+            }
         }
     }
     pthread_mutex_unlock(&mobile->mutex_cond);
@@ -425,7 +429,8 @@ void show_help_full(void)
         "-c|--config config  Config file path\n"
         "--dns1 addr         Set DNS1 address override\n"
         "--dns2 addr         Set DNS2 address override\n"
-        "--p2p_port port     Port to use for p2p communications\n"
+        "--p2p_relay addr    Set relay server for P2P communications\n"
+        "--p2p_port port     Port to use for P2P communications\n"
         "--device device     Adapter to emulate\n"
         "--unmetered         Signal unmetered communications to Pokémon\n"
     );
@@ -440,7 +445,7 @@ void main_checkparam(char *argv[])
     }
 }
 
-void main_parse_addr(struct mobile_addr *dest, char *argv[])
+void main_parse_addr(struct mobile_addr *dest, unsigned port, char *argv[])
 {
     unsigned char ip[MOBILE_PTON_MAXLEN];
     int rc = mobile_pton(MOBILE_PTON_ANY, argv[1], ip);
@@ -450,12 +455,12 @@ void main_parse_addr(struct mobile_addr *dest, char *argv[])
     switch (rc) {
     case MOBILE_PTON_IPV4:
         dest4->type = MOBILE_ADDRTYPE_IPV4;
-        dest4->port = MOBILE_DNS_PORT;
+        dest4->port = port;
         memcpy(dest4->host, ip, sizeof(dest4->host));
         break;
     case MOBILE_PTON_IPV6:
         dest6->type = MOBILE_ADDRTYPE_IPV6;
-        dest6->port = MOBILE_DNS_PORT;
+        dest6->port = port;
         memcpy(dest6->host, ip, sizeof(dest6->host));
         break;
     default:
@@ -474,7 +479,7 @@ int main(int argc, char *argv[])
 
     char *fname_config = "config.bin";
 
-    struct mobile_adapter_config adapter_config = MOBILE_ADAPTER_CONFIG_DEFAULT;
+    struct mobile_adapter_config adapter_config = MOBILE_DEFAULT_ADAPTER_CONFIG;
 
     (void)argc;
     while (*++argv) {
@@ -491,11 +496,16 @@ int main(int argc, char *argv[])
             argv += 1;
         } else if (strcmp(*argv, "--dns1") == 0) {
             main_checkparam(argv);
-            main_parse_addr(&adapter_config.dns1, argv);
+            main_parse_addr(&adapter_config.dns1, MOBILE_DNS_PORT, argv);
             argv += 1;
         } else if (strcmp(*argv, "--dns2") == 0) {
             main_checkparam(argv);
-            main_parse_addr(&adapter_config.dns2, argv);
+            main_parse_addr(&adapter_config.dns2, MOBILE_DNS_PORT, argv);
+            argv += 1;
+        } else if (strcmp(*argv, "--p2p_relay") == 0) {
+            main_checkparam(argv);
+            main_parse_addr(&adapter_config.p2p_relay,
+                MOBILE_DEFAULT_P2P_RELAY_PORT, argv);
             argv += 1;
         } else if (strcmp(*argv, "--p2p_port") == 0) {
             main_checkparam(argv);
