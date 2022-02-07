@@ -367,6 +367,10 @@ void *thread_mobile_loop(void *user)
 
             mobile->action = filter_actions(
                     mobile_action_get(&mobile->adapter));
+            if (mobile->action != MOBILE_ACTION_NONE) {
+                // Sleep 10ms to avoid busylooping too hard
+                nanosleep(&(struct timespec){.tv_nsec = 10000000}, NULL);
+            }
         }
     }
     pthread_mutex_unlock(&mobile->mutex_cond);
@@ -427,7 +431,8 @@ void show_help_full(void)
         "--dns1 addr         Set DNS1 address override\n"
         "--dns2 addr         Set DNS2 address override\n"
         "--dns_port port     Set DNS port for address overrides\n"
-        "--p2p_port port     Port to use for p2p communications\n"
+        "--p2p_relay addr    Set relay server for P2P communications\n"
+        "--p2p_port port     Port to use for relay-less p2p communications\n"
         "--device device     Adapter to emulate\n"
         "--unmetered         Signal unmetered communications to Pokémon\n"
     );
@@ -491,7 +496,7 @@ int main(int argc, char *argv[])
     char *fname_config = "config.bin";
     unsigned dns_port = MOBILE_DNS_PORT;
 
-    struct mobile_adapter_config adapter_config = MOBILE_ADAPTER_CONFIG_DEFAULT;
+    struct mobile_adapter_config adapter_config = MOBILE_DEFAULT_ADAPTER_CONFIG;
 
     (void)argc;
     while (*++argv) {
@@ -522,6 +527,11 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "Invalid parameter for --dns_port: %s\n", argv[1]);
                 show_help();
             }
+            argv += 1;
+        } else if (strcmp(*argv, "--p2p_relay") == 0) {
+            main_checkparam(argv);
+            main_parse_addr(&adapter_config.p2p_relay, argv);
+            main_set_port(&adapter_config.p2p_relay, MOBILE_DEFAULT_P2P_RELAY_PORT);
             argv += 1;
         } else if (strcmp(*argv, "--p2p_port") == 0) {
             main_checkparam(argv);
