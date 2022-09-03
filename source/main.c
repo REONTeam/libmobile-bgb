@@ -148,8 +148,9 @@ bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype sock
     }
 
     // Set TCP_NODELAY to aid sending packets inmediately, reducing latency
-    if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
-            (char *)&(int){1}, sizeof(int)) == -1) {
+    if (socktype == MOBILE_SOCKTYPE_TCP &&
+            setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+                (char *)&(int){1}, sizeof(int)) == -1) {
         socket_perror("setsockopt");
         socket_close(sock);
         return false;
