@@ -426,6 +426,7 @@ void show_help_full(void)
         "-c|--config config  Config file path\n"
         "--dns1 addr         Set DNS1 address override\n"
         "--dns2 addr         Set DNS2 address override\n"
+        "--dns_port port     Set DNS port for address overrides\n"
         "--p2p_port port     Port to use for p2p communications\n"
         "--device device     Adapter to emulate\n"
         "--unmetered         Signal unmetered communications to Pokémon\n"
@@ -451,17 +452,31 @@ void main_parse_addr(struct mobile_addr *dest, char *argv[])
     switch (rc) {
     case MOBILE_PTON_IPV4:
         dest4->type = MOBILE_ADDRTYPE_IPV4;
-        dest4->port = MOBILE_DNS_PORT;
         memcpy(dest4->host, ip, sizeof(dest4->host));
         break;
     case MOBILE_PTON_IPV6:
         dest6->type = MOBILE_ADDRTYPE_IPV6;
-        dest6->port = MOBILE_DNS_PORT;
         memcpy(dest6->host, ip, sizeof(dest6->host));
         break;
     default:
         fprintf(stderr, "Invalid parameter for %s: %s\n", argv[0], argv[1]);
         show_help();
+    }
+}
+
+void main_set_port(struct mobile_addr *dest, unsigned port)
+{
+    struct mobile_addr4 *dest4 = (struct mobile_addr4 *)dest;
+    struct mobile_addr6 *dest6 = (struct mobile_addr6 *)dest;
+    switch (dest->type) {
+    case MOBILE_ADDRTYPE_IPV4:
+        dest4->port = port;
+        break;
+    case MOBILE_ADDRTYPE_IPV6:
+        dest6->port = port;
+        break;
+    default:
+        break;
     }
 }
 
@@ -474,6 +489,7 @@ int main(int argc, char *argv[])
     char *port = "8765";
 
     char *fname_config = "config.bin";
+    unsigned dns_port = MOBILE_DNS_PORT;
 
     struct mobile_adapter_config adapter_config = MOBILE_ADAPTER_CONFIG_DEFAULT;
 
@@ -498,6 +514,15 @@ int main(int argc, char *argv[])
             main_checkparam(argv);
             main_parse_addr(&adapter_config.dns2, argv);
             argv += 1;
+        } else if (strcmp(*argv, "--dns_port") == 0) {
+            main_checkparam(argv);
+            char *endptr;
+            dns_port = strtol(argv[1], &endptr, 10);
+            if (!**argv || *endptr) {
+                fprintf(stderr, "Invalid parameter for --dns_port: %s\n", argv[1]);
+                show_help();
+            }
+            argv += 1;
         } else if (strcmp(*argv, "--p2p_port") == 0) {
             main_checkparam(argv);
             adapter_config.p2p_port = strtol(argv[1], NULL, 0);
@@ -517,6 +542,11 @@ int main(int argc, char *argv[])
     if (*argv) host = *argv++;
     if (*argv) port = *argv++;
 
+    // Set the DNS ports
+    main_set_port(&adapter_config.dns1, dns_port);
+    main_set_port(&adapter_config.dns2, dns_port);
+
+    // Open or create configuration
     FILE *config = fopen(fname_config, "r+b");
     if (!config) config = fopen(fname_config, "w+b");
     if (!config) {
