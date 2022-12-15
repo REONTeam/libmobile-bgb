@@ -13,6 +13,7 @@
 #include <netdb.h>
 #endif
 
+// Print last socket-related error
 void socket_perror(const char *func)
 {
     if (func) fprintf(stderr, "%s:", func);
@@ -36,10 +37,9 @@ void socket_perror(const char *func)
 #endif
 }
 
+// Convert a sockaddr to a printable string
 int socket_straddr(char *res, unsigned res_len, char *res_port, struct sockaddr *addr, socklen_t addrlen)
 {
-#if defined(__unix__)
-    (void)addrlen;
     void *inaddr = NULL;
     unsigned inport = 0;
     if (addr->sa_family == AF_INET) {
@@ -54,31 +54,22 @@ int socket_straddr(char *res, unsigned res_len, char *res_port, struct sockaddr 
         return -1;
     }
 
+#if defined(__unix__)
+    (void)addrlen;
     if (!inet_ntop(addr->sa_family, inaddr, res, res_len)) return -1;
-    sprintf(res_port, "%u", inport);
-    return 0;
 #elif defined(__WIN32__)
-    unsigned inport = 0;
-    if (addr->sa_family == AF_INET) {
-        struct sockaddr_in *addr4 = (struct sockaddr_in *)addr;
-        inport = ntohs(addr4->sin_port) & 0xFFFF;
-    } else if (addr->sa_family == AF_INET6) {
-        struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)addr;
-        inport = ntohs(addr6->sin6_port) & 0xFFFF;
-    } else {
-        return -1;
-    }
-
+    (void)inaddr;
     DWORD res_len_r = res_len;
     if (WSAAddressToStringA(addr, addrlen, NULL, res, &res_len_r)
             == SOCKET_ERROR) {
         return -1;
     }
+#endif
     sprintf(res_port, "%u", inport);
     return 0;
-#endif
 }
 
+// Check if a socket has data in the receive buffer (or an error)
 int socket_hasdata(int socket, int delay)
 {
 #if defined(__unix__)
@@ -103,6 +94,7 @@ int socket_hasdata(int socket, int delay)
 #endif
 }
 
+// Check if a connect() call has completed
 int socket_isconnected(int socket, int delay)
 {
 #if defined(__unix__)
@@ -131,6 +123,7 @@ int socket_isconnected(int socket, int delay)
     return 1;
 }
 
+// Set whether connect() and recv() calls on a socket block
 int socket_setblocking(int socket, int flag)
 {
 #if defined(__unix__)
@@ -152,6 +145,7 @@ int socket_setblocking(int socket, int flag)
     return 0;
 }
 
+// Connect a socket to a user-provided hostname and port
 int socket_connect(const char *host, const char *port)
 {
 	struct addrinfo hints = {

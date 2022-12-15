@@ -47,3 +47,4 @@ $(dir_build)/%.o: $(dir_source)/%.c | $$(dir $$@)
 	mkdir -p $@
 
 -include $(objects:.o=.d)
+-include config.mk

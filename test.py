@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 import time
 import socket
 import struct
 import subprocess
 import multiprocessing
+import threading
+import select
 import unittest
 
-class BGBMaster():
+
+class BGBMaster:
     BGB_CMD_VERSION = 1
     BGB_CMD_JOYPAD = 101
     BGB_CMD_SYNC1 = 104
@@ -54,7 +58,8 @@ class BGBMaster():
         for field in ["b2", "b3", "b4", "timestamp"]:
             if field not in pack:
                 pack[field] = 0
-        pack = struct.pack("<BBBBI",
+        pack = struct.pack(
+            "<BBBBI",
             pack["cmd"],
             pack["b2"],
             pack["b3"],
@@ -93,7 +98,7 @@ class BGBMaster():
             return (0,)
 
         if pack["cmd"] in [BGBMaster.BGB_CMD_JOYPAD, BGBMaster.BGB_CMD_STATUS,
-                BGBMaster.BGB_CMD_SYNC3]:
+                           BGBMaster.BGB_CMD_SYNC3]:
             # Nothing to do
             return (pack["cmd"],)
         if pack["cmd"] == BGBMaster.BGB_CMD_SYNC2:
@@ -134,12 +139,14 @@ class BGBMaster():
                 break
         return byte_ret
 
+
 class MobileCmdError(Exception):
     def __init__(self, code, *args):
         super().__init__(*args)
         self.code = code
 
-class Mobile():
+
+class Mobile:
     MOBILE_COMMAND_BEGIN_SESSION = 0x10
     MOBILE_COMMAND_END_SESSION = 0x11
     MOBILE_COMMAND_DIAL_TELEPHONE = 0x12
@@ -164,7 +171,6 @@ class Mobile():
 
     def __init__(self, bus):
         self.bus = bus
-        self.transfer_noret = False
 
     def transfer(self, cmd, *args, error=False):
         self.bus.update()
@@ -179,7 +185,6 @@ class Mobile():
                 raise Exception(
                         "Mobile.transfer: Unexpected idle byte: %02X"
                         % res)
-                return None
 
         self.bus.transfer(0x80)
         err = self.bus.transfer(0)
@@ -187,11 +192,6 @@ class Mobile():
             raise Exception(
                     "Mobile.transfer: Unexpected acknowledgement byte: %02X"
                     % err)
-            return None
-
-        if self.transfer_noret:
-            self.transfer_noret = False
-            return None
 
         while True:
             while self.bus.transfer(0x4B) != 0x99:
@@ -218,7 +218,7 @@ class Mobile():
         if recv_cmd == Mobile.MOBILE_COMMAND_ERROR:
             if pack[4] != cmd:
                 raise Exception("Mobile.transfer: Unexpected packet: %s"
-                        % pack)
+                                % pack)
             if not error:
                 raise MobileCmdError(pack[5])
             return pack[5]
@@ -240,10 +240,6 @@ class Mobile():
             return res
         raise Exception("Mobile.transfer_noreply: Unexpected data: %s" % res)
 
-    def set_transfer_noret(self):
-        # Don't wait for return for the next transfer
-        self.transfer_noret = True
-
     def cmd_begin_session(self):
         data = b"NINTENDO"
         res = self.transfer(Mobile.MOBILE_COMMAND_BEGIN_SESSION, *data)
@@ -257,7 +253,7 @@ class Mobile():
 
     def cmd_dial_telephone(self, number, prot=0):
         return self.transfer_noreply(Mobile.MOBILE_COMMAND_DIAL_TELEPHONE,
-                prot, *number.encode())
+                                     prot, *number.encode())
 
     def cmd_hang_up_telephone(self):
         return self.transfer_noreply(Mobile.MOBILE_COMMAND_HANG_UP_TELEPHONE)
@@ -266,7 +262,7 @@ class Mobile():
         res = self.transfer_noreply(
                 Mobile.MOBILE_COMMAND_WAIT_FOR_TELEPHONE_CALL,
                 error=error)
-        if res == True:
+        if res is True:
             return True
         if not error:
             raise MobileCmdError(res)
@@ -284,15 +280,16 @@ class Mobile():
         if len(res) < 1:
             raise Exception("Mobile.cmd_transfer_data: Invalid packet")
         if res[0] != conn:
-            raise Exception("Mobile.cmd_transfer_data: " +
-                    "Unexpected connection ID: %d != %d" % (res[0], conn))
+            raise Exception("Mobile.cmd_transfer_data: "
+                            + "Unexpected connection ID: %d != %d"
+                            % (res[0], conn))
         return res[1:]
 
     def cmd_telephone_status(self):
         res = self.transfer(Mobile.MOBILE_COMMAND_TELEPHONE_STATUS)
         if len(res) != 3:
             raise Exception("Mobile.cmd_telephone_status: Unexpected data: %s"
-                    % res)
+                            % res)
         return {
             "state": res[0],
             "service": res[1],
@@ -300,8 +297,9 @@ class Mobile():
         }
 
     def cmd_isp_login(self, s_id="nozomi", s_pass="wahaha1",
-            dns1=(0,0,0,0), dns2=(0,0,0,0)):
-        res = self.transfer(Mobile.MOBILE_COMMAND_ISP_LOGIN,
+                      dns1=(0, 0, 0, 0), dns2=(0, 0, 0, 0)):
+        res = self.transfer(
+                Mobile.MOBILE_COMMAND_ISP_LOGIN,
                 len(s_id), *s_id.encode(),
                 len(s_pass), *s_pass.encode(),
                 *dns1, *dns2)
@@ -316,9 +314,9 @@ class Mobile():
     def cmd_isp_logout(self):
         return self.transfer_noreply(Mobile.MOBILE_COMMAND_ISP_LOGOUT)
 
-    def cmd_open_tcp_connection(self, ip=(0,0,0,0), port=0):
+    def cmd_open_tcp_connection(self, ip=(0, 0, 0, 0), port=0):
         res = self.transfer(Mobile.MOBILE_COMMAND_OPEN_TCP_CONNECTION,
-                *ip, port >> 8, port)
+                            *ip, port >> 8, port)
         if not res:
             return None
         return res[0]
@@ -329,9 +327,9 @@ class Mobile():
         return self.transfer_noreply(
                 Mobile.MOBILE_COMMAND_CLOSE_TCP_CONNECTION, conn)
 
-    def cmd_open_udp_connection(self, ip=(0,0,0,0), port=0):
+    def cmd_open_udp_connection(self, ip=(0, 0, 0, 0), port=0):
         res = self.transfer(Mobile.MOBILE_COMMAND_OPEN_UDP_CONNECTION,
-                *ip, port >> 8, port)
+                            *ip, port >> 8, port)
         if not res:
             return None
         return res[0]
@@ -346,10 +344,12 @@ class Mobile():
             return None
         return tuple(res)
 
-class MobileProcess():
+
+class MobileProcess:
     def __init__(self, *args, port=8765):
         self.port = port
-        self.exe = ["./mobile", *args, "127.0.0.1", str(port)]
+        self.exe = ["./mobile", "--config", "config_test.bin",
+                    *args, "127.0.0.1", str(port)]
         self.bgb = None
         self.sub = None
         self.mob = None
@@ -364,8 +364,11 @@ class MobileProcess():
 
     def run(self):
         self.bgb = BGBMaster(port=self.port)
-        self.sub = subprocess.Popen(self.exe, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
+        if os.getenv("TEST_CFG_NOPIPE"):
+            self.sub = subprocess.Popen(self.exe)
+        else:
+            self.sub = subprocess.Popen(self.exe, stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE)
         self.bgb.accept()
         self.mob = Mobile(self.bgb)
 
@@ -392,7 +395,8 @@ class MobileProcess():
             self.bgb = None
         return self.communicate()
 
-class SimpleTCPServer():
+
+class SimpleTCPServer:
     def __init__(self, host="127.0.0.1", port=8766):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -427,7 +431,8 @@ class SimpleTCPServer():
     def send(self, *args, **kwargs):
         self.conn.send(*args, **kwargs)
 
-class SimpleDNSServer():
+
+class SimpleDNSServer:
     def __init__(self, host="127.0.0.1", port=5353):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((host, port))
@@ -487,7 +492,9 @@ class SimpleDNSServer():
 
     def handle(self):
         mesg, addr = self.sock.recvfrom(512)
-        id, flags, qdcount, ancount, nscount, arcount = struct.unpack_from("!HHHHHH", mesg, 0)
+
+        (id, flags, qdcount, ancount, nscount, arcount
+         ) = struct.unpack_from("!HHHHHH", mesg, 0)
         if flags != 0x0100 or qdcount != 1:
             return
 
@@ -509,6 +516,131 @@ class SimpleDNSServer():
         res += resdata
         self.sock.sendto(res, addr)
 
+
+class SimpleRelayServer:
+    def __init__(self, host="127.0.0.1", port=1027):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((host, port))
+        sock.listen()
+        self.sock = sock
+        self.proc = None
+
+        self.wait = {}
+        self.call = {}
+        self.index = 0
+
+    def __enter__(self):
+        self.run()
+
+    def __exit__(self, *args):
+        self.close()
+
+    def close(self):
+        if self.proc:
+            self.proc.terminate()
+            self.proc.join()
+            self.proc.close()
+            self.proc = None
+        if self.sock:
+            self.sock.close()
+            self.sock = None
+
+    def run(self):
+        def _run():
+            while True:
+                self.accept()
+        self.proc = multiprocessing.Process(target=_run)
+        self.proc.start()
+
+    def accept(self):
+        conn, addr = self.sock.accept()
+
+        def _run(conn, addr):
+            try:
+                self.handle(conn, addr)
+            except ConnectionResetError:
+                pass
+            finally:
+                conn.close()
+        thread = threading.Thread(target=_run, args=(conn, addr))
+        thread.start()
+
+    def relay(self, conn, pair):
+        while True:
+            data = conn.recv(1024)
+            if not data:
+                return
+            pair.send(data)
+
+    def handle_call(self, conn, index):
+        try:
+            number = int(conn.recv(conn.recv(1)[0]).decode())
+        except ValueError:
+            conn.send(b'\x00\x00\x01')
+            return False
+        pair = self.wait.get(number)
+        if pair is None:
+            conn.send(b'\x00\x00\x01')
+            return False
+        self.call[number] = (index, conn)
+        conn.send(b'\x00\x00\x00')
+        self.relay(conn, pair)
+        return True
+
+    def handle_wait(self, conn, index):
+        self.wait[index] = conn
+        try:
+            poller = select.poll()
+            poller.register(conn, select.POLLIN | select.POLLPRI)
+            while not self.call.get(index):
+                if poller.poll(100):
+                    return False
+        finally:
+            del self.wait[index]
+
+        caller = self.call[index]
+        del self.call[index]
+        num = ("%07d" % caller[0]).encode()
+        pair = caller[1]
+        conn.send(b'\x00\x01' + bytes([len(num)]) + num)
+        self.relay(conn, pair)
+        return True
+
+    def handle_get_number(self, conn, index):
+        num = ("%07d" % index).encode()
+        conn.send(b'\x00\x02' + bytes([len(num)]) + num)
+
+    def handle(self, conn, addr):
+        magic = b'\x00MOBILE'
+        handshake = conn.recv(0x18)
+
+        assert handshake.startswith(magic)
+        if handshake[7] == 0:
+            self.index += 1
+            index = self.index
+            token = bytes([index]) * 16
+            conn.send(magic + b'\x01' + token)
+        else:
+            index = handshake[8]
+            conn.send(magic + b'\x00')
+
+        while True:
+            data = conn.recv(2)
+            if not data:
+                break
+            assert data[0] == magic[0]
+
+            if data[1] == 0:
+                if self.handle_call(conn, index):
+                    break
+            if data[1] == 1:
+                if self.handle_wait(conn, index):
+                    break
+            if data[1] == 2:
+                self.handle_get_number(conn, index)
+
+
 def mobile_process_test(*args, **kwargs):
     def _deco(func):
         def deco(self):
@@ -516,14 +648,14 @@ def mobile_process_test(*args, **kwargs):
             try:
                 m.run()
                 func(self, m.mob)
-                m.close()
-            except Exception as e:
-                out, err = m.kill()
-                print(out.decode())
-                print(err.decode())
-                raise e
+            finally:
+                out, err = m.close()
+                if out and err:
+                    print(out.decode(), file=sys.stdout)
+                    print(err.decode(), file=sys.stderr)
         return deco
     return _deco
+
 
 class Tests(unittest.TestCase):
     @mobile_process_test("--device", "9")
@@ -555,6 +687,14 @@ class Tests(unittest.TestCase):
         m.cmd_end_session()
 
     @mobile_process_test()
+    def test_phone_fluke(self, m):
+        m.cmd_begin_session()
+        with self.assertRaises(MobileCmdError) as e:
+            m.cmd_dial_telephone("benis :DD")
+        self.assertEqual(e.exception.code, 3)
+        m.cmd_end_session()
+
+    @mobile_process_test("--p2p_port", "1028")
     def test_phone_server(self, m):
         m.cmd_begin_session()
 
@@ -567,14 +707,14 @@ class Tests(unittest.TestCase):
             # Start a connection to it
             t.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             t.setblocking(False)
-            self.assertNotEqual(t.connect_ex(("127.0.0.1", 1027)), 0)
+            self.assertNotEqual(t.connect_ex(("127.0.0.1", 1028)), 0)
             t.setblocking(True)
 
             # Accept connection
             self.assertEqual(m.cmd_wait_for_telephone_call(), True)
 
             # Finish connection
-            t.connect(("127.0.0.1", 1027))
+            t.connect(("127.0.0.1", 1028))
 
             # Send the data
             self.assertEqual(m.cmd_transfer_data(0xFF, data), b"")
@@ -595,13 +735,13 @@ class Tests(unittest.TestCase):
         m.cmd_hang_up_telephone()
         m.cmd_end_session()
 
-    @mobile_process_test()
+    @mobile_process_test("--p2p_port", "1028")
     def test_phone_client(self, m):
         m.cmd_begin_session()
 
         data = b"Hello World!"
 
-        with SimpleTCPServer("127.0.0.1", 1027) as t:
+        with SimpleTCPServer("127.0.0.1", 1028) as t:
             # Start a connection to the server and send data
             m.cmd_dial_telephone("127000000001")
             self.assertEqual(m.cmd_transfer_data(0, data), b"")
@@ -638,7 +778,7 @@ class Tests(unittest.TestCase):
             for x in range(2):
                 with SimpleTCPServer("127.0.0.1", 8767 + x) as t:
                     # Connect to the server
-                    cc = m.cmd_open_tcp_connection((127,0,0,1), 8767 + x)
+                    cc = m.cmd_open_tcp_connection((127, 0, 0, 1), 8767 + x)
                     t.accept()
 
                     # Transfer data, close server
@@ -664,19 +804,71 @@ class Tests(unittest.TestCase):
         m.cmd_begin_session()
         m.cmd_dial_telephone("0755311973")
         conn = m.cmd_isp_login()
-        self.assertEqual(conn["ip"], (127,0,0,1))
-        self.assertEqual(conn["dns1"], (127,0,0,1))
-        self.assertEqual(conn["dns2"], (0,0,0,0))
+        self.assertEqual(conn["ip"], (127, 0, 0, 1))
+        self.assertEqual(conn["dns1"], (127, 0, 0, 1))
+        self.assertEqual(conn["dns2"], (0, 0, 0, 0))
 
         with SimpleDNSServer():
-            self.assertEqual(m.cmd_dns_query("example.com"), (93,184,216,34))
-            self.assertEqual(m.cmd_dns_query("localhost"), (127,0,0,1))
-        self.assertEqual(m.cmd_dns_query("003.4.089.123"), (3,4,89,123))
-        self.assertEqual(m.cmd_dns_query("000000..."), (255,255,255,255))
+            self.assertEqual(m.cmd_dns_query("example.com"),
+                             (93, 184, 216, 34))
+            self.assertEqual(m.cmd_dns_query("localhost"),
+                             (127, 0, 0, 1))
+        self.assertEqual(m.cmd_dns_query("003.4.089.123"), (3, 4, 89, 123))
+        self.assertEqual(m.cmd_dns_query("000000..."), (255, 255, 255, 255))
+        self.assertEqual(m.cmd_dns_query("benis :DDD"), (255, 255, 255, 255))
 
         m.cmd_isp_logout()
         m.cmd_hang_up_telephone()
         m.cmd_end_session()
 
+    @mobile_process_test("--p2p_relay", "127.0.0.1")
+    def test_relay_fluke(self, m):
+        m.cmd_begin_session()
+        with SimpleRelayServer():
+            with self.assertRaises(MobileCmdError) as e:
+                m.cmd_dial_telephone("bagina :DD")
+            self.assertEqual(e.exception.code, 4)
+        with self.assertRaises(MobileCmdError) as e:
+            m.cmd_dial_telephone("bagina :DD")
+        self.assertEqual(e.exception.code, 3)
+        m.cmd_end_session()
+
+    @mobile_process_test("--p2p_relay", "127.0.0.1")
+    def test_relay_connection(self, m):
+        p2 = MobileProcess("--p2p_relay", "127.0.0.1", port=8766)
+        p2.run()
+        m2 = p2.mob
+
+        try:
+            m.cmd_begin_session()
+            m2.cmd_begin_session()
+            with SimpleRelayServer():
+                # Start connection with opposite mode to test switching
+                with self.assertRaises(MobileCmdError) as e:
+                    m2.cmd_dial_telephone("0000002")
+                self.assertEqual(e.exception.code, 4)
+                self.assertEqual(m2.cmd_wait_for_telephone_call(error=True), 0)
+
+                # Start listening
+                self.assertEqual(m.cmd_wait_for_telephone_call(error=True), 0)
+
+                # Connect
+                m2.cmd_dial_telephone("0000002")
+                for x in range(10):
+                    if m.cmd_wait_for_telephone_call(error=True) is True:
+                        break
+                    time.sleep(0.1)
+
+                # Ping poong
+                data = b"hello"
+                self.assertEqual(m.cmd_transfer_data(0xFF, data), b"")
+                self.assertEqual(m2.cmd_transfer_data(0xFF, data), data)
+                self.assertEqual(m.cmd_transfer_data(0xFF), data)
+            m.cmd_end_session()
+            m2.cmd_end_session()
+        finally:
+            p2.close()
+
+
 if __name__ == "__main__":
-    unittest.main(buffer=True, verbosity=2)
+    unittest.main(buffer=not os.getenv("TEST_CFG_NOPIPE"), verbosity=2)
