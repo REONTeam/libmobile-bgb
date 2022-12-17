@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include "libmobile/compat.h"
@@ -61,7 +60,7 @@ void bgb_loop(int socket, unsigned char (*callback_transfer)(void *, unsigned ch
     struct bgb_packet packet;
 
     unsigned char transfer_last = 0xD2;
-    unsigned char transfer_cur = transfer_last;
+    unsigned char transfer_cur;
     uint32_t timestamp_last = 0;
     uint32_t timestamp_cur = timestamp_last;
 

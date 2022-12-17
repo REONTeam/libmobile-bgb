@@ -95,17 +95,17 @@ class BGBMaster:
     def handle(self):
         pack = self.recv()
         if not pack:
-            return (0,)
+            return 0,
 
         if pack["cmd"] in [BGBMaster.BGB_CMD_JOYPAD, BGBMaster.BGB_CMD_STATUS,
                            BGBMaster.BGB_CMD_SYNC3]:
             # Nothing to do
-            return (pack["cmd"],)
+            return pack["cmd"],
         if pack["cmd"] == BGBMaster.BGB_CMD_SYNC2:
-            return (pack["cmd"], pack["b2"])
+            return pack["cmd"], pack["b2"]
 
         print("BGBMaster.handle: Unhandled packet:", pack, file=sys.stderr)
-        return (0,)
+        return 0,
 
     def add_time(self, offset):
         # Offset in seconds
@@ -131,7 +131,6 @@ class BGBMaster:
         }
         self.send(pack)
 
-        byte_ret = None
         while True:
             res = self.handle()
             if res[0] == BGBMaster.BGB_CMD_SYNC2:
@@ -462,14 +461,16 @@ class SimpleDNSServer:
         self.proc = multiprocessing.Process(target=_run)
         self.proc.start()
 
-    def query(self, name, qtype):
+    @staticmethod
+    def query(name, qtype):
         ip = [127, 0, 0, 1]
         if qtype == 1:  # A (ipv4)
             if name == "example.com":
                 ip = [93, 184, 216, 34]
         return bytes(ip)
 
-    def make_name(self, string):
+    @staticmethod
+    def make_name(string):
         res = bytearray()
         for x in string.split("."):
             res.append(len(x))
@@ -477,23 +478,24 @@ class SimpleDNSServer:
         res.append(0)
         return bytes(res)
 
-    def read_name(self, data, offs):
+    @staticmethod
+    def read_name(data, offs):
         res = ""
         while True:
-            len = data[offs]
+            siz = data[offs]
             offs += 1
-            if not len:
+            if not siz:
                 break
             if res:
                 res += "."
-            res += data[offs:offs+len].decode()
-            offs += len
+            res += data[offs:offs+siz].decode()
+            offs += siz
         return res, offs
 
     def handle(self):
         mesg, addr = self.sock.recvfrom(512)
 
-        (id, flags, qdcount, ancount, nscount, arcount
+        (pid, flags, qdcount, ancount, nscount, arcount
          ) = struct.unpack_from("!HHHHHH", mesg, 0)
         if flags != 0x0100 or qdcount != 1:
             return
@@ -508,7 +510,7 @@ class SimpleDNSServer:
 
         # Encode result
         res = bytearray()
-        res += struct.pack("!HHHHHH", id, 0x8180, 1, 1, 0, 0)
+        res += struct.pack("!HHHHHH", pid, 0x8180, 1, 1, 0, 0)
         res += resname
         res += struct.pack("!HH", qtype, qclass)
         res += b'\xc0\x0c'
@@ -519,10 +521,12 @@ class SimpleDNSServer:
 
 class SimpleRelayServer:
     def __init__(self, host="127.0.0.1", port=1027):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((host, port))
-        sock.listen()
+        sock = None
+        if not os.getenv("TEST_CFG_REALRELAY"):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((host, port))
+            sock.listen()
         self.sock = sock
         self.proc = None
 
@@ -531,7 +535,8 @@ class SimpleRelayServer:
         self.index = 0
 
     def __enter__(self):
-        self.run()
+        if not os.getenv("TEST_CFG_REALRELAY"):
+            self.run()
 
     def __exit__(self, *args):
         self.close()
@@ -554,16 +559,16 @@ class SimpleRelayServer:
         self.proc.start()
 
     def accept(self):
-        conn, addr = self.sock.accept()
+        _conn, _addr = self.sock.accept()
 
-        def _run(conn, addr):
+        def _run(conn):
             try:
-                self.handle(conn, addr)
+                self.handle(conn)
             except ConnectionResetError:
                 pass
             finally:
                 conn.close()
-        thread = threading.Thread(target=_run, args=(conn, addr))
+        thread = threading.Thread(target=_run, args=(_conn,))
         thread.start()
 
     def relay(self, conn, pair):
@@ -581,7 +586,7 @@ class SimpleRelayServer:
             return False
         pair = self.wait.get(number)
         if pair is None:
-            conn.send(b'\x00\x00\x01')
+            conn.send(b'\x00\x00\x03')
             return False
         self.call[number] = (index, conn)
         conn.send(b'\x00\x00\x00')
@@ -603,7 +608,7 @@ class SimpleRelayServer:
         del self.call[index]
         num = ("%07d" % caller[0]).encode()
         pair = caller[1]
-        conn.send(b'\x00\x01' + bytes([len(num)]) + num)
+        conn.send(b'\x00\x01\x00' + bytes([len(num)]) + num)
         self.relay(conn, pair)
         return True
 
@@ -611,7 +616,7 @@ class SimpleRelayServer:
         num = ("%07d" % index).encode()
         conn.send(b'\x00\x02' + bytes([len(num)]) + num)
 
-    def handle(self, conn, addr):
+    def handle(self, conn):
         magic = b'\x00MOBILE'
         handshake = conn.recv(0x18)
 
@@ -821,13 +826,14 @@ class Tests(unittest.TestCase):
         m.cmd_hang_up_telephone()
         m.cmd_end_session()
 
+    @unittest.skipIf(os.getenv("TEST_CFG_REALRELAY"), "Needs fake relay")
     @mobile_process_test("--p2p_relay", "127.0.0.1")
     def test_relay_fluke(self, m):
         m.cmd_begin_session()
         with SimpleRelayServer():
             with self.assertRaises(MobileCmdError) as e:
                 m.cmd_dial_telephone("bagina :DD")
-            self.assertEqual(e.exception.code, 4)
+            self.assertEqual(e.exception.code, 3)
         with self.assertRaises(MobileCmdError) as e:
             m.cmd_dial_telephone("bagina :DD")
         self.assertEqual(e.exception.code, 3)
@@ -840,16 +846,16 @@ class Tests(unittest.TestCase):
         m2 = p2.mob
 
         try:
-            m.cmd_begin_session()
-            m2.cmd_begin_session()
             with SimpleRelayServer():
                 # Start connection with opposite mode to test switching
+                m2.cmd_begin_session()
                 with self.assertRaises(MobileCmdError) as e:
                     m2.cmd_dial_telephone("0000002")
-                self.assertEqual(e.exception.code, 4)
+                self.assertEqual(e.exception.code, 0)
                 self.assertEqual(m2.cmd_wait_for_telephone_call(error=True), 0)
 
                 # Start listening
+                m.cmd_begin_session()
                 self.assertEqual(m.cmd_wait_for_telephone_call(error=True), 0)
 
                 # Connect

@@ -85,14 +85,14 @@ void mobile_board_serial_enable(void *user)
 bool mobile_board_config_read(void *user, void *dest, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    fseek(mobile->config, offset, SEEK_SET);
+    fseek(mobile->config, (long)offset, SEEK_SET);
     return fread(dest, 1, size, mobile->config) == size;
 }
 
 bool mobile_board_config_write(void *user, const void *src, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    fseek(mobile->config, offset, SEEK_SET);
+    fseek(mobile->config, (long)offset, SEEK_SET);
     return fwrite(src, 1, size, mobile->config) == size;
 }
 
@@ -156,7 +156,7 @@ bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype sock
         return false;
     }
 
-    int rc = -1;
+    int rc;
     if (addrtype == MOBILE_ADDRTYPE_IPV4) {
         struct sockaddr_in addr = {
             .sin_family = AF_INET,
@@ -266,12 +266,12 @@ int mobile_board_sock_send(void *user, unsigned conn, const void *data, const un
     if (len == -1) {
         // If the socket is blocking, we just haven't sent anything
         int err = socket_geterror();
-        if (err == SOCKET_EWOULDBLOCK || err == SOCKET_EAGAIN) return 0;
+        if (err == SOCKET_EWOULDBLOCK) return 0;
 
         socket_perror("send");
         return -1;
     }
-    return len;
+    return (int)len;
 }
 
 int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
@@ -286,7 +286,7 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
     socklen_t sock_addrlen = sizeof(u_addr);
     struct sockaddr *sock_addr = (struct sockaddr *)&u_addr;
 
-    ssize_t len = 0;
+    ssize_t len;
     if (data) {
         // Retrieve at least 1 byte from the buffer
         len = recvfrom(sock, data, size, 0, sock_addr, &sock_addrlen);
@@ -299,7 +299,7 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
         // If the socket is blocking, we just haven't received anything
         // Though this shouldn't happen thanks to the socket_hasdata check.
         int err = socket_geterror();
-        if (err == SOCKET_EWOULDBLOCK || err == SOCKET_EAGAIN) return 0;
+        if (err == SOCKET_EWOULDBLOCK) return 0;
 
         socket_perror("recv");
         return -1;
@@ -334,7 +334,7 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
         }
     }
 
-    return len;
+    return (int)len;
 }
 
 static enum mobile_action filter_actions(enum mobile_action action)
@@ -550,7 +550,7 @@ int main(int argc, char *argv[])
     }
 
     if (*argv) host = *argv++;
-    if (*argv) port = *argv++;
+    if (*argv) port = *argv;
 
     // Set the DNS ports
     main_set_port(&adapter_config.dns1, dns_port);
@@ -566,7 +566,7 @@ int main(int argc, char *argv[])
 
     // Make sure config file is at least MOBILE_CONFIG_SIZE bytes big
     fseek(config, 0, SEEK_END);
-    for (int i = ftell(config); i < MOBILE_CONFIG_SIZE; i++) {
+    for (long i = ftell(config); i < MOBILE_CONFIG_SIZE; i++) {
         fputc(0, config);
     }
     rewind(config);

@@ -4,7 +4,6 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/time.h>
 
 #if defined(__unix__)
 #include <arpa/inet.h>
@@ -40,8 +39,8 @@ void socket_perror(const char *func)
 // Convert a sockaddr to a printable string
 int socket_straddr(char *res, unsigned res_len, char *res_port, struct sockaddr *addr, socklen_t addrlen)
 {
-    void *inaddr = NULL;
-    unsigned inport = 0;
+    void *inaddr;
+    unsigned inport;
     if (addr->sa_family == AF_INET) {
         struct sockaddr_in *addr4 = (struct sockaddr_in *)addr;
         inaddr = &addr4->sin_addr;
