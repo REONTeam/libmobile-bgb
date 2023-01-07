@@ -432,7 +432,7 @@ void show_help_full(void)
         "--dns2 addr         Set DNS2 address override\n"
         "--dns_port port     Set DNS port for address overrides\n"
         "--p2p_relay addr    Set relay server for P2P communications\n"
-        "--p2p_port port     Port to use for relay-less p2p communications\n"
+        "--p2p_port port     Port to use for relay-less P2P communications\n"
         "--device device     Adapter to emulate\n"
         "--unmetered         Signal unmetered communications to Pokémon\n"
     );
@@ -494,9 +494,13 @@ int main(int argc, char *argv[])
     char *port = "8765";
 
     char *fname_config = "config.bin";
+    enum mobile_adapter_device device = MOBILE_ADAPTER_BLUE;
+    bool device_unmetered = false;
     unsigned dns_port = MOBILE_DNS_PORT;
-
-    struct mobile_adapter_config adapter_config = MOBILE_DEFAULT_ADAPTER_CONFIG;
+    struct mobile_addr dns1 = {0};
+    struct mobile_addr dns2 = {0};
+    unsigned p2p_port = MOBILE_DEFAULT_P2P_PORT;
+    struct mobile_addr relay = {0};
 
     (void)argc;
     while (*++argv) {
@@ -513,11 +517,11 @@ int main(int argc, char *argv[])
             argv += 1;
         } else if (strcmp(*argv, "--dns1") == 0) {
             main_checkparam(argv);
-            main_parse_addr(&adapter_config.dns1, argv);
+            main_parse_addr(&dns1, argv);
             argv += 1;
         } else if (strcmp(*argv, "--dns2") == 0) {
             main_checkparam(argv);
-            main_parse_addr(&adapter_config.dns2, argv);
+            main_parse_addr(&dns2, argv);
             argv += 1;
         } else if (strcmp(*argv, "--dns_port") == 0) {
             main_checkparam(argv);
@@ -530,19 +534,19 @@ int main(int argc, char *argv[])
             argv += 1;
         } else if (strcmp(*argv, "--p2p_relay") == 0) {
             main_checkparam(argv);
-            main_parse_addr(&adapter_config.p2p_relay, argv);
-            main_set_port(&adapter_config.p2p_relay, MOBILE_DEFAULT_P2P_RELAY_PORT);
+            main_parse_addr(&relay, argv);
+            main_set_port(&relay, MOBILE_DEFAULT_RELAY_PORT);
             argv += 1;
         } else if (strcmp(*argv, "--p2p_port") == 0) {
             main_checkparam(argv);
-            adapter_config.p2p_port = strtol(argv[1], NULL, 0);
+            p2p_port = strtol(argv[1], NULL, 0);
             argv += 1;
         } else if (strcmp(*argv, "--device") == 0) {
             main_checkparam(argv);
-            adapter_config.device = strtol(argv[1], NULL, 0);
+            device = strtol(argv[1], NULL, 0);
             argv += 1;
         } else if (strcmp(*argv, "--unmetered") == 0) {
-            adapter_config.unmetered = true;
+            device_unmetered = true;
         } else {
             fprintf(stderr, "Unknown option: %s\n", *argv);
             show_help();
@@ -553,8 +557,8 @@ int main(int argc, char *argv[])
     if (*argv) port = *argv;
 
     // Set the DNS ports
-    main_set_port(&adapter_config.dns1, dns_port);
-    main_set_port(&adapter_config.dns2, dns_port);
+    main_set_port(&dns1, dns_port);
+    main_set_port(&dns2, dns_port);
 
     // Open or create configuration
     FILE *config = fopen(fname_config, "r+b");
@@ -605,7 +609,11 @@ int main(int argc, char *argv[])
     mobile->bgb_clock = 0;
     for (int i = 0; i < MOBILE_MAX_TIMERS; i++) mobile->bgb_clock_latch[i] = 0;
     for (int i = 0; i < MOBILE_MAX_CONNECTIONS; i++) mobile->sockets[i] = -1;
-    mobile_init(&mobile->adapter, mobile, &adapter_config);
+    mobile_init(&mobile->adapter, mobile);
+    mobile_config_set_device(&mobile->adapter, device, device_unmetered);
+    mobile_config_set_dns(&mobile->adapter, &dns1, &dns2);
+    mobile_config_set_p2p_port(&mobile->adapter, p2p_port);
+    mobile_config_set_relay(&mobile->adapter, &relay);
 
     pthread_t mobile_thread;
     int pthread_err = pthread_create(&mobile_thread, NULL, thread_mobile_loop, mobile);
