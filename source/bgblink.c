@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include "libmobile/compat.h"
@@ -36,7 +35,7 @@ static const struct bgb_packet handshake = {
     .timestamp = 0,
 };
 
-static bool bgb_write(int socket, struct bgb_packet *buf)
+static bool bgb_send(int socket, struct bgb_packet *buf)
 {
     ssize_t num = send(socket, (char *)buf, sizeof(struct bgb_packet), 0);
     if (num == -1) {
@@ -46,7 +45,7 @@ static bool bgb_write(int socket, struct bgb_packet *buf)
     return num == sizeof(struct bgb_packet);
 }
 
-static bool bgb_read(int socket, struct bgb_packet *buf)
+static bool bgb_recv(int socket, struct bgb_packet *buf)
 {
     ssize_t num = recv(socket, (char *)buf, sizeof(struct bgb_packet), 0);
     if (num == -1) {
@@ -56,22 +55,24 @@ static bool bgb_read(int socket, struct bgb_packet *buf)
     return num == sizeof(struct bgb_packet);
 }
 
-void bgb_loop(int socket, unsigned char (*callback_transfer)(void *, unsigned char), void (*callback_timestamp)(void *, uint32_t), void *user)
+bool bgb_init(struct bgb_state *state, int socket, bgb_transfer_cb callback_transfer, bgb_timestamp_cb callback_timestamp, void *user)
 {
     struct bgb_packet packet;
 
-    unsigned char transfer_last = 0xD2;
-    unsigned char transfer_cur = transfer_last;
-    uint32_t timestamp_last = 0;
-    uint32_t timestamp_cur = timestamp_last;
+    state->user = user;
+    state->socket = socket;
+    state->callback_transfer = callback_transfer;
+    state->callback_timestamp = callback_timestamp;
+    state->transfer_last = 0xD2;
+    state->timestamp_last = 0;
 
     // Handshake
     memcpy(&packet, &handshake, sizeof(packet));
-    if (!bgb_write(socket, &packet)) return;
-    if (!bgb_read(socket, &packet)) return;
+    if (!bgb_send(socket, &packet)) return false;
+    if (!bgb_recv(socket, &packet)) return false;
     if (memcmp(&packet, &handshake, sizeof(packet)) != 0) {
         fprintf(stderr, "bgb_loop: Invalid handshake\n");
-        return;
+        return false;
     }
 
     // Send initial status
@@ -80,76 +81,85 @@ void bgb_loop(int socket, unsigned char (*callback_transfer)(void *, unsigned ch
     packet.b3 = 0;
     packet.b4 = 0;
     packet.timestamp = 0;
-    if (!bgb_write(socket, &packet)) return;
+    if (!bgb_send(socket, &packet)) return false;
 
-    bool set_status = false;
+    return true;
+}
 
-    for (;;) {
-        if (!bgb_read(socket, &packet)) return;
+bool bgb_loop(struct bgb_state *state)
+{
+    struct bgb_packet packet;
+    unsigned char transfer_cur;
+    uint32_t timestamp_cur = state->timestamp_last;
 
-        switch (packet.cmd) {
-        case BGB_CMD_JOYPAD:
-            // Not relevant
-            break;
+    if (!bgb_recv(state->socket, &packet)) return false;
 
-        case BGB_CMD_SYNC1:
-            transfer_cur = packet.b2;
-            timestamp_cur = packet.timestamp;
-            packet.cmd = BGB_CMD_SYNC2;
-            packet.b2 = transfer_last;
-            packet.b3 = 0x80;
+    switch (packet.cmd) {
+    case BGB_CMD_JOYPAD:
+        // Not relevant
+        break;
+
+    case BGB_CMD_SYNC1:
+        transfer_cur = packet.b2;
+        timestamp_cur = packet.timestamp;
+        packet.cmd = BGB_CMD_SYNC2;
+        packet.b2 = state->transfer_last;
+        packet.b3 = 0x80;
+        packet.b4 = 0;
+        packet.timestamp = 0;
+        if (!bgb_send(state->socket, &packet)) return false;
+        state->transfer_last =
+            state->callback_transfer(state->user, transfer_cur);
+        break;
+
+    case BGB_CMD_SYNC2:
+        // Can be sent if the game has queued up a byte to send as slave...
+        // Not necessary to reply.
+        break;
+
+    case BGB_CMD_SYNC3:
+        timestamp_cur = packet.timestamp;
+        if (packet.b2 != 0) break;
+        if (!bgb_send(state->socket, &packet)) return false;
+        break;
+
+    case BGB_CMD_STATUS:
+        if (!state->set_status) {
+            packet.cmd = BGB_CMD_STATUS;
+            packet.b2 = 1;
+            packet.b3 = 0;
             packet.b4 = 0;
             packet.timestamp = 0;
-            if (!bgb_write(socket, &packet)) return;
-            transfer_last = callback_transfer(user, transfer_cur);
-            break;
-
-        case BGB_CMD_SYNC2:
-            // Can be sent if the game has queued up a byte to send as slave...
-            // Not necessary to reply.
-            break;
-
-        case BGB_CMD_SYNC3:
-            timestamp_cur = packet.timestamp;
-            if (packet.b2 != 0) break;
-            if (!bgb_write(socket, &packet)) return;
-            break;
-
-        case BGB_CMD_STATUS:
-            if (!set_status) {
-                packet.cmd = BGB_CMD_STATUS;
-                packet.b2 = 1;
-                packet.b3 = 0;
-                packet.b4 = 0;
-                packet.timestamp = 0;
-                if (!bgb_write(socket, &packet)) return;
-                set_status = true;
-            }
-            break;
-
-        default:
-            fprintf(stderr, "bgb_loop: Unknown command: %d (%02X %02X %02X) @ %d\n",
-                    packet.cmd, packet.b2, packet.b3, packet.b4, packet.timestamp);
-            return;
+            if (!bgb_send(state->socket, &packet)) return false;
+            state->set_status = true;
         }
+        break;
 
-        if (callback_timestamp) {
-            // Attempt to detect the clock going back in time
-            // This is probably a BGB bug, caused by enabling some options,
-            //   such as the "break on ld d,d" option.
-            uint32_t diff = (timestamp_last - timestamp_cur) & 0x7FFFFFFF;
-            if (diff != 0 && diff < 0x100) {
-                fprintf(stderr, "[BUG] Emulator went back in time? "
-                    "old: 0x%08X; new: 0x%08X\n",
-                    timestamp_last, timestamp_cur);
-                timestamp_cur = timestamp_last;
-            }
-
-            if (timestamp_cur != timestamp_last) {
-                callback_timestamp(user, timestamp_cur);
-            }
-        }
+    default:
+        fprintf(stderr, "bgb_loop: Unknown command: %d (%02X %02X %02X) @ %d\n",
+                packet.cmd, packet.b2, packet.b3, packet.b4, packet.timestamp);
+        return false;
     }
+
+    if (state->callback_timestamp) {
+        // Attempt to detect the clock going back in time
+        // This is probably a BGB bug, caused by enabling some options,
+        //   such as the "break on ld d,d" option.
+        uint32_t diff = (state->timestamp_last - timestamp_cur) & 0x7FFFFFFF;
+        if (diff != 0 && diff < 0x100) {
+            fprintf(stderr, "[BUG] Emulator went back in time? "
+                "old: 0x%08X; new: 0x%08X\n",
+                state->timestamp_last, timestamp_cur);
+            timestamp_cur = state->timestamp_last;
+        }
+
+        if (state->timestamp_last != timestamp_cur) {
+            state->callback_timestamp(state->user, timestamp_cur);
+        }
+        state->timestamp_last = timestamp_cur;
+    }
+
+    return true;
 }
 
 // Bad attmept at implementing link support with the VBA-M emulator.

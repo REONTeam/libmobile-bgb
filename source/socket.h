@@ -19,7 +19,6 @@
 #define socket_close close
 #define socket_geterror() errno
 #define socket_seterror(e) errno = (e)
-#define SOCKET_EAGAIN EAGAIN
 #define SOCKET_EWOULDBLOCK EWOULDBLOCK
 #define SOCKET_EINPROGRESS EINPROGRESS
 #define SOCKET_EALREADY EALREADY
@@ -27,7 +26,6 @@
 #define socket_close closesocket
 #define socket_geterror() WSAGetLastError()
 #define socket_seterror(e) WSASetLastError(e)
-#define SOCKET_EAGAIN WSAEWOULDBLOCK
 #define SOCKET_EWOULDBLOCK WSAEWOULDBLOCK
 #define SOCKET_EINPROGRESS WSAEINPROGRESS
 #define SOCKET_EALREADY WSAEALREADY

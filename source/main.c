@@ -9,11 +9,19 @@
 #include <assert.h>
 #include <locale.h>
 #include <pthread.h>
+#include <signal.h>
 #include "libmobile/mobile.h"
 #include "libmobile/inet_pton.h"
 
 #include "socket.h"
 #include "bgblink.h"
+
+// config.bin layout
+#define CONFIG_OFFSET_MOBILE 0
+#define CONFIG_SIZE_MOBILE MOBILE_CONFIG_SIZE
+#define CONFIG_OFFSET_RELAY_TOKEN (CONFIG_OFFSET_MOBILE + CONFIG_SIZE_MOBILE)
+#define CONFIG_SIZE_RELAY_TOKEN (1 + MOBILE_RELAY_TOKEN_SIZE)
+#define CONFIG_SIZE (CONFIG_OFFSET_RELAY_TOKEN + CONFIG_SIZE_RELAY_TOKEN)
 
 struct mobile_user {
     pthread_mutex_t mutex_serial;
@@ -85,14 +93,14 @@ void mobile_board_serial_enable(void *user)
 bool mobile_board_config_read(void *user, void *dest, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    fseek(mobile->config, offset, SEEK_SET);
+    fseek(mobile->config, CONFIG_OFFSET_MOBILE + (long)offset, SEEK_SET);
     return fread(dest, 1, size, mobile->config) == size;
 }
 
 bool mobile_board_config_write(void *user, const void *src, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    fseek(mobile->config, offset, SEEK_SET);
+    fseek(mobile->config, CONFIG_OFFSET_MOBILE + (long)offset, SEEK_SET);
     return fwrite(src, 1, size, mobile->config) == size;
 }
 
@@ -119,14 +127,14 @@ bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype sock
     switch (socktype) {
         case MOBILE_SOCKTYPE_TCP: sock_socktype = SOCK_STREAM; break;
         case MOBILE_SOCKTYPE_UDP: sock_socktype = SOCK_DGRAM; break;
-        default: return false;
+        default: assert(false); return false;
     }
 
     int sock_addrtype;
     switch (addrtype) {
         case MOBILE_ADDRTYPE_IPV4: sock_addrtype = AF_INET; break;
         case MOBILE_ADDRTYPE_IPV6: sock_addrtype = AF_INET6; break;
-        default: return false;
+        default: assert(false); return false;
     }
 
     int sock = socket(sock_addrtype, sock_socktype, 0);
@@ -156,7 +164,7 @@ bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype sock
         return false;
     }
 
-    int rc = -1;
+    int rc;
     if (addrtype == MOBILE_ADDRTYPE_IPV4) {
         struct sockaddr_in addr = {
             .sin_family = AF_INET,
@@ -192,6 +200,7 @@ int mobile_board_sock_connect(void *user, unsigned conn, const struct mobile_add
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
+    assert(sock != -1);
 
     union u_sockaddr u_addr;
     socklen_t sock_addrlen;
@@ -226,6 +235,7 @@ bool mobile_board_sock_listen(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
+    assert(sock != -1);
 
     if (listen(sock, 1) == -1) {
         socket_perror("listen");
@@ -239,6 +249,7 @@ bool mobile_board_sock_accept(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
+    assert(sock != -1);
 
     if (socket_hasdata(sock, 1000) <= 0) return false;
     int newsock = accept(sock, NULL, NULL);
@@ -257,6 +268,7 @@ int mobile_board_sock_send(void *user, unsigned conn, const void *data, const un
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
+    assert(sock != -1);
 
     union u_sockaddr u_addr;
     socklen_t sock_addrlen;
@@ -266,18 +278,19 @@ int mobile_board_sock_send(void *user, unsigned conn, const void *data, const un
     if (len == -1) {
         // If the socket is blocking, we just haven't sent anything
         int err = socket_geterror();
-        if (err == SOCKET_EWOULDBLOCK || err == SOCKET_EAGAIN) return 0;
+        if (err == SOCKET_EWOULDBLOCK) return 0;
 
         socket_perror("send");
         return -1;
     }
-    return len;
+    return (int)len;
 }
 
 int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
+    assert(sock != -1);
 
     // Make sure at least one byte is in the buffer
     if (socket_hasdata(sock, 0) <= 0) return 0;
@@ -286,7 +299,7 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
     socklen_t sock_addrlen = sizeof(u_addr);
     struct sockaddr *sock_addr = (struct sockaddr *)&u_addr;
 
-    ssize_t len = 0;
+    ssize_t len;
     if (data) {
         // Retrieve at least 1 byte from the buffer
         len = recvfrom(sock, data, size, 0, sock_addr, &sock_addrlen);
@@ -299,7 +312,7 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
         // If the socket is blocking, we just haven't received anything
         // Though this shouldn't happen thanks to the socket_hasdata check.
         int err = socket_geterror();
-        if (err == SOCKET_EWOULDBLOCK || err == SOCKET_EAGAIN) return 0;
+        if (err == SOCKET_EWOULDBLOCK) return 0;
 
         socket_perror("recv");
         return -1;
@@ -334,7 +347,7 @@ int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size,
         }
     }
 
-    return len;
+    return (int)len;
 }
 
 static enum mobile_action filter_actions(enum mobile_action action)
@@ -367,6 +380,10 @@ void *thread_mobile_loop(void *user)
 
             mobile->action = filter_actions(
                     mobile_action_get(&mobile->adapter));
+            if (mobile->action != MOBILE_ACTION_NONE) {
+                // Sleep 10ms to avoid busylooping too hard
+                nanosleep(&(struct timespec){.tv_nsec = 10000000}, NULL);
+            }
         }
     }
     pthread_mutex_unlock(&mobile->mutex_cond);
@@ -410,6 +427,24 @@ void bgb_loop_timestamp(void *user, uint32_t t)
     bgb_loop_action(mobile);
 }
 
+bool signal_int_trig = false;
+#if defined(__unix__)
+void signal_int(int signo)
+{
+    (void)signo;
+    signal_int_trig = true;
+}
+#elif defined(__WIN32__)
+BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
+{
+    if (fdwCtrlType == CTRL_C_EVENT) {
+        signal_int_trig = true;
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif
+
 char *program_name;
 
 void show_help(void)
@@ -420,16 +455,17 @@ void show_help(void)
 
 void show_help_full(void)
 {
-    fprintf(stderr, "%s [-h] [-c config] [host [port]]\n", program_name);
+    fprintf(stderr, "%s [-h] [-c config] [options] [host [port]]\n", program_name);
     fprintf(stderr, "\n"
         "-h|--help           Show this help\n"
         "-c|--config config  Config file path\n"
+        "--device device     Adapter to emulate\n"
+        "--unmetered         Signal unmetered communications to Pokémon\n"
         "--dns1 addr         Set DNS1 address override\n"
         "--dns2 addr         Set DNS2 address override\n"
         "--dns_port port     Set DNS port for address overrides\n"
-        "--p2p_port port     Port to use for p2p communications\n"
-        "--device device     Adapter to emulate\n"
-        "--unmetered         Signal unmetered communications to Pokémon\n"
+        "--p2p_port port     Port to use for relay-less P2P communications\n"
+        "--relay addr        Set relay server for P2P communications\n"
     );
     exit(EXIT_SUCCESS);
 }
@@ -489,9 +525,13 @@ int main(int argc, char *argv[])
     char *port = "8765";
 
     char *fname_config = "config.bin";
+    enum mobile_adapter_device device = MOBILE_ADAPTER_BLUE;
+    bool device_unmetered = false;
+    struct mobile_addr dns1 = {0};
+    struct mobile_addr dns2 = {0};
     unsigned dns_port = MOBILE_DNS_PORT;
-
-    struct mobile_adapter_config adapter_config = MOBILE_ADAPTER_CONFIG_DEFAULT;
+    unsigned p2p_port = MOBILE_DEFAULT_P2P_PORT;
+    struct mobile_addr relay = {0};
 
     (void)argc;
     while (*++argv) {
@@ -506,13 +546,19 @@ int main(int argc, char *argv[])
             main_checkparam(argv);
             fname_config = argv[1];
             argv += 1;
+        } else if (strcmp(*argv, "--device") == 0) {
+            main_checkparam(argv);
+            device = strtol(argv[1], NULL, 0);
+            argv += 1;
+        } else if (strcmp(*argv, "--unmetered") == 0) {
+            device_unmetered = true;
         } else if (strcmp(*argv, "--dns1") == 0) {
             main_checkparam(argv);
-            main_parse_addr(&adapter_config.dns1, argv);
+            main_parse_addr(&dns1, argv);
             argv += 1;
         } else if (strcmp(*argv, "--dns2") == 0) {
             main_checkparam(argv);
-            main_parse_addr(&adapter_config.dns2, argv);
+            main_parse_addr(&dns2, argv);
             argv += 1;
         } else if (strcmp(*argv, "--dns_port") == 0) {
             main_checkparam(argv);
@@ -525,14 +571,13 @@ int main(int argc, char *argv[])
             argv += 1;
         } else if (strcmp(*argv, "--p2p_port") == 0) {
             main_checkparam(argv);
-            adapter_config.p2p_port = strtol(argv[1], NULL, 0);
+            p2p_port = strtol(argv[1], NULL, 0);
             argv += 1;
-        } else if (strcmp(*argv, "--device") == 0) {
+        } else if (strcmp(*argv, "--relay") == 0) {
             main_checkparam(argv);
-            adapter_config.device = strtol(argv[1], NULL, 0);
+            main_parse_addr(&relay, argv);
+            main_set_port(&relay, MOBILE_DEFAULT_RELAY_PORT);
             argv += 1;
-        } else if (strcmp(*argv, "--unmetered") == 0) {
-            adapter_config.unmetered = true;
         } else {
             fprintf(stderr, "Unknown option: %s\n", *argv);
             show_help();
@@ -540,11 +585,11 @@ int main(int argc, char *argv[])
     }
 
     if (*argv) host = *argv++;
-    if (*argv) port = *argv++;
+    if (*argv) port = *argv;
 
     // Set the DNS ports
-    main_set_port(&adapter_config.dns1, dns_port);
-    main_set_port(&adapter_config.dns2, dns_port);
+    main_set_port(&dns1, dns_port);
+    main_set_port(&dns2, dns_port);
 
     // Open or create configuration
     FILE *config = fopen(fname_config, "r+b");
@@ -554,22 +599,24 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // Make sure config file is at least MOBILE_CONFIG_SIZE bytes big
+    // Make sure config file is at least CONFIG_SIZE bytes big
     fseek(config, 0, SEEK_END);
-    for (int i = ftell(config); i < MOBILE_CONFIG_SIZE; i++) {
+    for (long i = ftell(config); i < CONFIG_SIZE; i++) {
         fputc(0, config);
     }
     rewind(config);
 
+    // Initialize windows sockets
 #ifdef __WIN32__
     WSADATA wsaData;
-    int err = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (err != NO_ERROR) {
-        printf("WSAStartup failed with error: %d\n", err);
+    int wsa_err = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (wsa_err != NO_ERROR) {
+        fprintf(stderr, "WSAStartup failed with error: %d\n", wsa_err);
         return EXIT_FAILURE;
     }
 #endif
 
+    // Connect to the emulator
     int bgb_sock = socket_connect(host, port);
     if (bgb_sock == -1) {
         fprintf(stderr, "Could not connect (%s:%s):", host, port);
@@ -582,6 +629,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    // Initialize main data structure
     struct mobile_user *mobile = malloc(sizeof(struct mobile_user));
     if (!mobile) {
         perror("malloc");
@@ -595,28 +643,75 @@ int main(int argc, char *argv[])
     mobile->bgb_clock = 0;
     for (int i = 0; i < MOBILE_MAX_TIMERS; i++) mobile->bgb_clock_latch[i] = 0;
     for (int i = 0; i < MOBILE_MAX_CONNECTIONS; i++) mobile->sockets[i] = -1;
-    mobile_init(&mobile->adapter, mobile, &adapter_config);
 
+    // Initialize mobile library
+    mobile_init(&mobile->adapter, mobile);
+    mobile_config_set_device(&mobile->adapter, device, device_unmetered);
+    mobile_config_set_dns(&mobile->adapter, &dns1, &dns2);
+    mobile_config_set_p2p_port(&mobile->adapter, p2p_port);
+    mobile_config_set_relay(&mobile->adapter, &relay);
+
+    // Load relay token from config
+    fseek(config, CONFIG_OFFSET_RELAY_TOKEN, SEEK_SET);
+    if (fgetc(config)) {  // If the token is saved
+        unsigned char relay_token[MOBILE_RELAY_TOKEN_SIZE];
+        if (fread(relay_token, MOBILE_RELAY_TOKEN_SIZE, 1, config) == 1) {
+            mobile_config_set_relay_token(&mobile->adapter, relay_token);
+        }
+    }
+    fseek(config, 0, SEEK_SET);
+
+    // Set up CTRL+C signal handler
+#if defined(__unix__)
+    if (sigaction(SIGINT, &(struct sigaction){.sa_handler = signal_int},
+            NULL) == -1) {
+        perror("sigaction");
+        return EXIT_FAILURE;
+    }
+#elif defined(__WIN32__)
+    if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
+        fprintf(stderr, "SetConsoleCtrlHandler failed\n");
+        return EXIT_FAILURE;
+    }
+#endif
+
+    // Start main mobile thread
     pthread_t mobile_thread;
     int pthread_err = pthread_create(&mobile_thread, NULL, thread_mobile_loop, mobile);
     if (pthread_err) {
         fprintf(stderr, "pthread_create: %s\n", strerror(pthread_err));
         return EXIT_FAILURE;
     }
-    bgb_loop(bgb_sock, bgb_loop_transfer, bgb_loop_timestamp, mobile);
+
+    // Handle the emulator connection
+    struct bgb_state bgb_state;
+    if (bgb_init(&bgb_state, bgb_sock, bgb_loop_transfer, bgb_loop_timestamp,
+            mobile)) {
+        while (!signal_int_trig) if (!bgb_loop(&bgb_state)) break;
+    }
+
+    // Stop the main mobile thread
     pthread_cancel(mobile_thread);
     pthread_join(mobile_thread, NULL);
 
+    // Close all sockets
     for (unsigned i = 0; i < MOBILE_MAX_CONNECTIONS; i++) {
         if (mobile->sockets[i] != -1) socket_close(mobile->sockets[i]);
     }
     socket_close(bgb_sock);
 
+    // Save the relay token if available
+    unsigned char relay_token[MOBILE_RELAY_TOKEN_SIZE];
+    if (mobile_config_get_relay_token(&mobile->adapter, relay_token)) {
+        fseek(config, CONFIG_OFFSET_RELAY_TOKEN, SEEK_SET);
+        fputc(true, config);
+        fwrite(relay_token, MOBILE_RELAY_TOKEN_SIZE, 1, config);
+    }
+
 #ifdef __WIN32__
     WSACleanup();
 #endif
-
-    fclose(mobile->config);
+    fclose(config);
     free(mobile);
 
     return EXIT_SUCCESS;

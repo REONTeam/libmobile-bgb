@@ -3,5 +3,7 @@
 /mobile
 /mobile.exe
 /config.bin
+/config_test.bin
 /releng/musl/
 /releng/winxp-pthreads/
+/config.mk

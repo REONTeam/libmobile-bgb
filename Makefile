@@ -11,7 +11,7 @@ CFLAGS += -pthread #$(shell pkg-config --cflags ...)
 LDLIBS += -pthread #$(shell pkg-config --libs ...)
 
 SANIT := -fsanitize=address -fsanitize=leak -fsanitize=undefined
-OPTIM := -Os -fdata-sections -ffunction-sections -flto -fuse-linker-plugin -Wl,--gc-sections
+OPTIM := -DNDEBUG -Os -fdata-sections -ffunction-sections -flto -fuse-linker-plugin -Wl,--gc-sections
 
 rwildcard = $(foreach d,$(wildcard $1/*),$(filter $2,$d) $(call rwildcard,$d,$2))
 objects := $(patsubst $(dir_source)/%.c,$(dir_build)/%.o,$(call rwildcard,$(dir_source),%.c))
@@ -47,3 +47,4 @@ $(dir_build)/%.o: $(dir_source)/%.c | $$(dir $$@)
 	mkdir -p $@
 
 -include $(objects:.o=.d)
+-include config.mk
