@@ -15,11 +15,16 @@ make_musl() {
     make -C .. "$@"
 }
 
-if [ -f musl/bin/musl-gcc ]; then
+if command -v x86_64-pc-linux-gnu-gcc 2>&1 > /dev/null; then
     make_musl clean
     make_musl optim
+    cp ../mobile mobile-linux
+    make_musl clean
 fi
-if command -v x86_64-w64-mingw32-gcc 2> /dev/null; then
+
+if command -v x86_64-w64-mingw32-gcc 2>&1 > /dev/null; then
     make_mingw clean
     make_mingw optim
+    cp ../mobile.exe mobile-windows.exe
+    make_mingw clean
 fi

@@ -1,3 +1,4 @@
+/config.mk
 /build/
 /build.exe/
 /mobile
@@ -7,4 +8,5 @@
 /config_test_p2.bin
 /releng/musl/
 /releng/winxp-pthreads/
-/config.mk
+/releng/mobile-linux
+/releng/mobile-windows.exe
