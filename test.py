@@ -804,14 +804,14 @@ class Tests(unittest.TestCase):
             # Test auto cleanup by ending session without closing connections
             m.cmd_end_session()
 
-    @mobile_process_test("--dns1", "127.0.0.1", "--dns_port", "5353")
+    @mobile_process_test("--dns2", "127.0.0.1", "--dns_port", "5353")
     def test_dns_query(self, m):
         m.cmd_begin_session()
         m.cmd_dial_telephone("0755311973")
         conn = m.cmd_isp_login()
         self.assertEqual(conn["ip"], (127, 0, 0, 1))
-        self.assertEqual(conn["dns1"], (127, 0, 0, 1))
-        self.assertEqual(conn["dns2"], (0, 0, 0, 0))
+        self.assertEqual(conn["dns1"], (0, 0, 0, 0))
+        self.assertEqual(conn["dns2"], (127, 0, 0, 1))
 
         with SimpleDNSServer():
             self.assertEqual(m.cmd_dns_query("example.com"),
@@ -827,7 +827,7 @@ class Tests(unittest.TestCase):
         m.cmd_end_session()
 
     @unittest.skipIf(os.getenv("TEST_CFG_REALRELAY"), "Needs fake relay")
-    @mobile_process_test("--p2p_relay", "127.0.0.1")
+    @mobile_process_test("--relay", "127.0.0.1")
     def test_relay_fluke(self, m):
         m.cmd_begin_session()
         with SimpleRelayServer():
@@ -839,9 +839,21 @@ class Tests(unittest.TestCase):
         self.assertEqual(e.exception.code, 3)
         m.cmd_end_session()
 
-    @mobile_process_test("--p2p_relay", "127.0.0.1")
+    @unittest.skipIf(os.getenv("TEST_CFG_REALRELAY"), "Needs fake relay")
+    @mobile_process_test("--relay", "127.0.0.1")
+    def test_relay_reset(self, m):
+        # Test whether the relay state is reset properly across resets
+        for x in range(3):
+            m.cmd_begin_session()
+            with self.assertRaises(MobileCmdError) as e:
+                m.cmd_dial_telephone("bagina :DDD")
+            self.assertEqual(e.exception.code, 3)
+            m.bus.add_time(5)
+            time.sleep(0.1)
+
+    @mobile_process_test("--relay", "127.0.0.1")
     def test_relay_connection(self, m):
-        p2 = MobileProcess("--p2p_relay", "127.0.0.1", port=8766)
+        p2 = MobileProcess("--relay", "127.0.0.1", port=8766)
         p2.run()
         m2 = p2.mob
 
