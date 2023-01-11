@@ -6,7 +6,7 @@
 /config.bin
 /config_test.bin
 /config_test_p2.bin
-/releng/musl/
-/releng/winxp-pthreads/
+/releng/src/
+/releng/lib/
 /releng/mobile-linux
 /releng/mobile-windows.exe
