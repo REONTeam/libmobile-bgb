@@ -147,6 +147,7 @@ void bgb_loop(int socket, unsigned char (*callback_transfer)(void *, unsigned ch
             if (timestamp_cur != timestamp_last) {
                 callback_timestamp(user, timestamp_cur);
             }
+            timestamp_last = timestamp_cur;
         }
     }
 }
