@@ -853,7 +853,8 @@ class Tests(unittest.TestCase):
 
     @mobile_process_test("--relay", "127.0.0.1")
     def test_relay_connection(self, m):
-        p2 = MobileProcess("--relay", "127.0.0.1", port=8766)
+        p2 = MobileProcess("--relay", "127.0.0.1",
+                           "--config", "config_test_p2.bin", port=8766)
         p2.run()
         m2 = p2.mob
 
