@@ -65,45 +65,45 @@ static struct sockaddr *convert_sockaddr(socklen_t *addrlen, union u_sockaddr *u
     }
 }
 
-void mobile_board_debug_log(void *user, const char *line)
+void mobile_impl_debug_log(void *user, const char *line)
 {
     (void)user;
     fprintf(stderr, "%s\n", line);
 }
 
-void mobile_board_serial_disable(void *user)
+void mobile_impl_serial_disable(void *user)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     pthread_mutex_lock(&mobile->mutex_serial);
 }
 
-void mobile_board_serial_enable(void *user)
+void mobile_impl_serial_enable(void *user)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     pthread_mutex_unlock(&mobile->mutex_serial);
 }
 
-bool mobile_board_config_read(void *user, void *dest, const uintptr_t offset, const size_t size)
+bool mobile_impl_config_read(void *user, void *dest, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     fseek(mobile->config, (long)offset, SEEK_SET);
     return fread(dest, 1, size, mobile->config) == size;
 }
 
-bool mobile_board_config_write(void *user, const void *src, const uintptr_t offset, const size_t size)
+bool mobile_impl_config_write(void *user, const void *src, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     fseek(mobile->config, (long)offset, SEEK_SET);
     return fwrite(src, 1, size, mobile->config) == size;
 }
 
-void mobile_board_time_latch(void *user, enum mobile_timers timer)
+void mobile_impl_time_latch(void *user, enum mobile_timers timer)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     mobile->bgb_clock_latch[timer] = mobile->bgb_clock;
 }
 
-bool mobile_board_time_check_ms(void *user, enum mobile_timers timer, unsigned ms)
+bool mobile_impl_time_check_ms(void *user, enum mobile_timers timer, unsigned ms)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     return
@@ -111,7 +111,7 @@ bool mobile_board_time_check_ms(void *user, enum mobile_timers timer, unsigned m
         (uint32_t)((double)ms * (1 << 21) / 1000);
 }
 
-bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype socktype, enum mobile_addrtype addrtype, unsigned bindport)
+bool mobile_impl_sock_open(void *user, unsigned conn, enum mobile_socktype socktype, enum mobile_addrtype addrtype, unsigned bindport)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     assert(mobile->sockets[conn] == -1);
@@ -181,7 +181,7 @@ bool mobile_board_sock_open(void *user, unsigned conn, enum mobile_socktype sock
     return true;
 }
 
-void mobile_board_sock_close(void *user, unsigned conn)
+void mobile_impl_sock_close(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     assert(mobile->sockets[conn] != -1);
@@ -189,7 +189,7 @@ void mobile_board_sock_close(void *user, unsigned conn)
     mobile->sockets[conn] = -1;
 }
 
-int mobile_board_sock_connect(void *user, unsigned conn, const struct mobile_addr *addr)
+int mobile_impl_sock_connect(void *user, unsigned conn, const struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -224,7 +224,7 @@ int mobile_board_sock_connect(void *user, unsigned conn, const struct mobile_add
     return -1;
 }
 
-bool mobile_board_sock_listen(void *user, unsigned conn)
+bool mobile_impl_sock_listen(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -238,7 +238,7 @@ bool mobile_board_sock_listen(void *user, unsigned conn)
     return true;
 }
 
-bool mobile_board_sock_accept(void *user, unsigned conn)
+bool mobile_impl_sock_accept(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -257,7 +257,7 @@ bool mobile_board_sock_accept(void *user, unsigned conn)
     return true;
 }
 
-int mobile_board_sock_send(void *user, unsigned conn, const void *data, const unsigned size, const struct mobile_addr *addr)
+int mobile_impl_sock_send(void *user, unsigned conn, const void *data, const unsigned size, const struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -279,7 +279,7 @@ int mobile_board_sock_send(void *user, unsigned conn, const void *data, const un
     return (int)len;
 }
 
-int mobile_board_sock_recv(void *user, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
+int mobile_impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
