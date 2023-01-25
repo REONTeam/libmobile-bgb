@@ -136,6 +136,7 @@ class BGBMaster:
             if res[0] == BGBMaster.BGB_CMD_SYNC2:
                 byte_ret = res[1]
                 break
+        # print("%02X %02X" % (byte, byte_ret))
         return byte_ret
 
 
@@ -193,7 +194,11 @@ class Mobile:
                     % err)
 
         while True:
+            timeout = 0
             while self.bus.transfer(0x4B) != 0x99:
+                if timeout >= 100:
+                    raise Exception("Mobile.transfer: wait timeout")
+                timeout += 1
                 time.sleep(0.01)
                 continue
             if self.bus.transfer(0x4B) == 0x66:
@@ -520,7 +525,7 @@ class SimpleDNSServer:
 
 
 class SimpleRelayServer:
-    def __init__(self, host="127.0.0.1", port=1027):
+    def __init__(self, host="127.0.0.1", port=31227):
         sock = None
         if not os.getenv("TEST_CFG_REALRELAY"):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

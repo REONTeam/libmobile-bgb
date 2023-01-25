@@ -368,7 +368,6 @@ static enum mobile_action filter_actions(enum mobile_action action)
 void *thread_mobile_loop(void *user)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    pthread_mutex_lock(&mobile->mutex_cond);
     for (;;) {
         // Implicitly unlocks mutex_cond while waiting
         pthread_cond_wait(&mobile->cond, &mobile->mutex_cond);
@@ -386,7 +385,6 @@ void *thread_mobile_loop(void *user)
             }
         }
     }
-    pthread_mutex_unlock(&mobile->mutex_cond);
 }
 
 void bgb_loop_action(struct mobile_user *mobile)
@@ -676,6 +674,7 @@ int main(int argc, char *argv[])
 #endif
 
     // Start main mobile thread
+    pthread_mutex_lock(&mobile->mutex_cond);
     pthread_t mobile_thread;
     int pthread_err = pthread_create(&mobile_thread, NULL, thread_mobile_loop, mobile);
     if (pthread_err) {
