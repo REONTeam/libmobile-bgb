@@ -856,10 +856,12 @@ class Tests(unittest.TestCase):
             m.bus.add_time(5)
             time.sleep(0.1)
 
-    @mobile_process_test("--relay", "127.0.0.1")
+    @mobile_process_test("--relay", "127.0.0.1", "--relay-token", "01" * 16)
     def test_relay_connection(self, m):
         p2 = MobileProcess("--relay", "127.0.0.1",
-                           "--config", "config_test_p2.bin", port=8766)
+                           "--config", "config_test_p2.bin",
+                           "--relay-token", "02" * 16,
+                           port=8766)
         p2.run()
         m2 = p2.mob
 
@@ -868,7 +870,7 @@ class Tests(unittest.TestCase):
                 # Start connection with opposite mode to test switching
                 m2.cmd_begin_session()
                 with self.assertRaises(MobileCmdError) as e:
-                    m2.cmd_dial_telephone("0000002")
+                    m2.cmd_dial_telephone("0000001")
                 self.assertEqual(e.exception.code, 0)
                 self.assertEqual(m2.cmd_wait_for_telephone_call(error=True), 0)
 
@@ -877,7 +879,7 @@ class Tests(unittest.TestCase):
                 self.assertEqual(m.cmd_wait_for_telephone_call(error=True), 0)
 
                 # Connect
-                m2.cmd_dial_telephone("0000002")
+                m2.cmd_dial_telephone("0000001")
                 for x in range(10):
                     if m.cmd_wait_for_telephone_call(error=True) is True:
                         break

@@ -16,13 +16,6 @@
 #include "socket.h"
 #include "bgblink.h"
 
-// config.bin layout
-#define CONFIG_OFFSET_MOBILE 0
-#define CONFIG_SIZE_MOBILE MOBILE_CONFIG_SIZE
-#define CONFIG_OFFSET_RELAY_TOKEN (CONFIG_OFFSET_MOBILE + CONFIG_SIZE_MOBILE)
-#define CONFIG_SIZE_RELAY_TOKEN (1 + MOBILE_RELAY_TOKEN_SIZE)
-#define CONFIG_SIZE (CONFIG_OFFSET_RELAY_TOKEN + CONFIG_SIZE_RELAY_TOKEN)
-
 struct mobile_user {
     pthread_mutex_t mutex_serial;
     pthread_mutex_t mutex_cond;
@@ -93,14 +86,14 @@ void mobile_board_serial_enable(void *user)
 bool mobile_board_config_read(void *user, void *dest, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    fseek(mobile->config, CONFIG_OFFSET_MOBILE + (long)offset, SEEK_SET);
+    fseek(mobile->config, (long)offset, SEEK_SET);
     return fread(dest, 1, size, mobile->config) == size;
 }
 
 bool mobile_board_config_write(void *user, const void *src, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    fseek(mobile->config, CONFIG_OFFSET_MOBILE + (long)offset, SEEK_SET);
+    fseek(mobile->config, (long)offset, SEEK_SET);
     return fwrite(src, 1, size, mobile->config) == size;
 }
 
@@ -455,15 +448,16 @@ void show_help_full(void)
 {
     fprintf(stderr, "%s [-h] [-c config] [options] [host [port]]\n", program_name);
     fprintf(stderr, "\n"
-        "-h|--help           Show this help\n"
-        "-c|--config config  Config file path\n"
-        "--device device     Adapter to emulate\n"
-        "--unmetered         Signal unmetered communications to Pokémon\n"
-        "--dns1 addr         Set DNS1 address override\n"
-        "--dns2 addr         Set DNS2 address override\n"
-        "--dns_port port     Set DNS port for address overrides\n"
-        "--p2p_port port     Port to use for relay-less P2P communications\n"
-        "--relay addr        Set relay server for P2P communications\n"
+        "-h|--help             Show this help\n"
+        "-c|--config config    Config file path\n"
+        "--device device       Adapter to emulate\n"
+        "--unmetered           Signal unmetered communications to Pokémon\n"
+        "--dns1 addr           Set DNS1 address override\n"
+        "--dns2 addr           Set DNS2 address override\n"
+        "--dns_port port       Set DNS port for address overrides\n"
+        "--p2p_port port       Port to use for relay-less P2P communications\n"
+        "--relay addr          Set relay server for P2P communications\n"
+        "--relay-token hex     Set relay token (or empty to clear)\n"
     );
     exit(EXIT_SUCCESS);
 }
@@ -471,7 +465,7 @@ void show_help_full(void)
 void main_checkparam(char *argv[])
 {
     if (!argv[1]) {
-        fprintf(stderr, "Missing parameter: %s\n", argv[0]);
+        fprintf(stderr, "Missing parameter for %s\n", argv[0]);
         show_help();
     }
 }
@@ -514,6 +508,27 @@ void main_set_port(struct mobile_addr *dest, unsigned port)
     }
 }
 
+bool main_parse_hex(unsigned char *buf, char *str, unsigned size)
+{
+    unsigned char x = 0;
+    for (unsigned i = 0; i < size * 2; i++) {
+        char c = str[i];
+        if (c >= '0' && c <= '9') c -= '0';
+        else if (c >= 'A' && c <= 'F') c -= 'A' - 10;
+        else if (c >= 'a' && c <= 'f') c -= 'a' - 10;
+        else return false;
+
+        x <<= 4;
+        x |= c;
+
+        if (i % 2 == 1) {
+            buf[i / 2] = x;
+            x = 0;
+        }
+    }
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     program_name = argv[0];
@@ -530,6 +545,9 @@ int main(int argc, char *argv[])
     unsigned dns_port = MOBILE_DNS_PORT;
     unsigned p2p_port = MOBILE_DEFAULT_P2P_PORT;
     struct mobile_addr relay = {0};
+    bool relay_token_update = false;
+    unsigned char *relay_token = NULL;
+    unsigned char relay_token_buf[MOBILE_RELAY_TOKEN_SIZE];
 
     (void)argc;
     while (*++argv) {
@@ -563,7 +581,8 @@ int main(int argc, char *argv[])
             char *endptr;
             dns_port = strtol(argv[1], &endptr, 10);
             if (!**argv || *endptr) {
-                fprintf(stderr, "Invalid parameter for --dns_port: %s\n", argv[1]);
+                fprintf(stderr, "Invalid parameter for --dns_port: %s\n",
+                    argv[1]);
                 show_help();
             }
             argv += 1;
@@ -576,6 +595,24 @@ int main(int argc, char *argv[])
             main_parse_addr(&relay, argv);
             main_set_port(&relay, MOBILE_DEFAULT_RELAY_PORT);
             argv += 1;
+        } else if (strcmp(*argv, "--relay-token") == 0) {
+            main_checkparam(argv);
+            relay_token_update = true;
+            bool ok = false;
+            if (strlen(argv[1]) == 0) {
+                ok = true;
+                relay_token = NULL;
+            } else if (strlen(argv[1]) == sizeof(relay_token_buf) * 2) {
+                ok = main_parse_hex(relay_token_buf, argv[1],
+                    sizeof(relay_token_buf));
+                relay_token = relay_token_buf;
+            }
+            if (!ok) {
+                fprintf(stderr, "Invalid parameter for --relay-token: %s\n",
+                    argv[1]);
+                show_help();
+            }
+            argv += 1;
         } else {
             fprintf(stderr, "Unknown option: %s\n", *argv);
             show_help();
@@ -585,53 +622,34 @@ int main(int argc, char *argv[])
     if (*argv) host = *argv++;
     if (*argv) port = *argv;
 
+    // OS resources
+    FILE *config = NULL;
+    struct mobile_user *mobile = NULL;
+
     // Set the DNS ports
     main_set_port(&dns1, dns_port);
     main_set_port(&dns2, dns_port);
 
     // Open or create configuration
-    FILE *config = fopen(fname_config, "r+b");
+    config = fopen(fname_config, "r+b");
     if (!config) config = fopen(fname_config, "w+b");
     if (!config) {
         perror("fopen");
-        return EXIT_FAILURE;
+        goto error;
     }
 
     // Make sure config file is at least CONFIG_SIZE bytes big
     fseek(config, 0, SEEK_END);
-    for (long i = ftell(config); i < CONFIG_SIZE; i++) {
+    for (long i = ftell(config); i < MOBILE_CONFIG_SIZE; i++) {
         fputc(0, config);
     }
     rewind(config);
 
-    // Initialize windows sockets
-#ifdef __WIN32__
-    WSADATA wsaData;
-    int wsa_err = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (wsa_err != NO_ERROR) {
-        fprintf(stderr, "WSAStartup failed with error: %d\n", wsa_err);
-        return EXIT_FAILURE;
-    }
-#endif
-
-    // Connect to the emulator
-    int bgb_sock = socket_connect(host, port);
-    if (bgb_sock == -1) {
-        fprintf(stderr, "Could not connect (%s:%s):", host, port);
-        socket_perror(NULL);
-        return EXIT_FAILURE;
-    }
-    if (setsockopt(bgb_sock, IPPROTO_TCP, TCP_NODELAY,
-            (void *)&(int){1}, sizeof(int)) == -1) {
-        socket_perror("setsockopt");
-        return EXIT_FAILURE;
-    }
-
     // Initialize main data structure
-    struct mobile_user *mobile = malloc(sizeof(struct mobile_user));
+    mobile = malloc(sizeof(struct mobile_user));
     if (!mobile) {
         perror("malloc");
-        return EXIT_FAILURE;
+        goto error;
     }
     mobile->mutex_serial = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     mobile->mutex_cond = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
@@ -648,28 +666,51 @@ int main(int argc, char *argv[])
     mobile_config_set_dns(&mobile->adapter, &dns1, &dns2);
     mobile_config_set_p2p_port(&mobile->adapter, p2p_port);
     mobile_config_set_relay(&mobile->adapter, &relay);
-
-    // Load relay token from config
-    fseek(config, CONFIG_OFFSET_RELAY_TOKEN, SEEK_SET);
-    if (fgetc(config)) {  // If the token is saved
-        unsigned char relay_token[MOBILE_RELAY_TOKEN_SIZE];
-        if (fread(relay_token, MOBILE_RELAY_TOKEN_SIZE, 1, config) == 1) {
-            mobile_config_set_relay_token(&mobile->adapter, relay_token);
-        }
+    if (relay_token_update) {
+        mobile_config_set_relay_token(&mobile->adapter, relay_token);
     }
-    fseek(config, 0, SEEK_SET);
+
+    // Process any initial events (to e.g. write the config)
+    enum mobile_action action;
+    while ((action = mobile_action_get(&mobile->adapter))
+            != MOBILE_ACTION_NONE) {
+        mobile_action_process(&mobile->adapter, action);
+    }
+
+    // Initialize windows sockets
+#ifdef __WIN32__
+    WSADATA wsaData;
+    int wsa_err = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (wsa_err != NO_ERROR) {
+        fprintf(stderr, "WSAStartup failed with error: %d\n", wsa_err);
+        goto error;
+    }
+#endif
+
+    // Connect to the emulator
+    int bgb_sock = socket_connect(host, port);
+    if (bgb_sock == -1) {
+        fprintf(stderr, "Could not connect (%s:%s):", host, port);
+        socket_perror(NULL);
+        goto error;
+    }
+    if (setsockopt(bgb_sock, IPPROTO_TCP, TCP_NODELAY,
+                (void *)&(int){1}, sizeof(int)) == -1) {
+        socket_perror("setsockopt");
+        goto error;
+    }
 
     // Set up CTRL+C signal handler
 #if defined(__unix__)
     if (sigaction(SIGINT, &(struct sigaction){.sa_handler = signal_int},
             NULL) == -1) {
         perror("sigaction");
-        return EXIT_FAILURE;
+        goto error;
     }
 #elif defined(__WIN32__)
     if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
         fprintf(stderr, "SetConsoleCtrlHandler failed\n");
-        return EXIT_FAILURE;
+        goto error;
     }
 #endif
 
@@ -679,7 +720,7 @@ int main(int argc, char *argv[])
     int pthread_err = pthread_create(&mobile_thread, NULL, thread_mobile_loop, mobile);
     if (pthread_err) {
         fprintf(stderr, "pthread_create: %s\n", strerror(pthread_err));
-        return EXIT_FAILURE;
+        goto error;
     }
 
     // Handle the emulator connection
@@ -699,19 +740,16 @@ int main(int argc, char *argv[])
     }
     socket_close(bgb_sock);
 
-    // Save the relay token if available
-    unsigned char relay_token[MOBILE_RELAY_TOKEN_SIZE];
-    if (mobile_config_get_relay_token(&mobile->adapter, relay_token)) {
-        fseek(config, CONFIG_OFFSET_RELAY_TOKEN, SEEK_SET);
-        fputc(true, config);
-        fwrite(relay_token, MOBILE_RELAY_TOKEN_SIZE, 1, config);
-    }
-
 #ifdef __WIN32__
     WSACleanup();
 #endif
-    fclose(config);
     free(mobile);
+    fclose(config);
 
     return EXIT_SUCCESS;
+
+error:
+    if (mobile) free(mobile);
+    if (config) fclose(config);
+    return EXIT_FAILURE;
 }
