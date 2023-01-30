@@ -2,9 +2,11 @@ name := mobile
 
 dir_source := source
 dir_build := build
+dir_subproj := subprojects
 
 STRIP ?= strip
 
+CPPFLAGS := -I $(dir_subproj)/libmobile $(CPPFLAGS)
 CFLAGS := -Og -g -Wall -Wextra -std=gnu17 $(CFLAGS)
 
 CFLAGS += -pthread #$(shell pkg-config --cflags ...)
@@ -15,6 +17,7 @@ OPTIM := -DNDEBUG -Os -fdata-sections -ffunction-sections -flto -fuse-linker-plu
 
 rwildcard = $(foreach d,$(wildcard $1/*),$(filter $2,$d) $(call rwildcard,$d,$2))
 objects := $(patsubst $(dir_source)/%.c,$(dir_build)/%.o,$(call rwildcard,$(dir_source),%.c))
+objects += $(patsubst $(dir_subproj)/%.c,$(dir_build)/subprojects/%.o,$(call rwildcard,$(dir_subproj)/libmobile,%.c))
 
 .SECONDEXPANSION:
 
@@ -40,6 +43,9 @@ $(name): $(objects)
 	$(LINK.o) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
 $(dir_build)/%.o: $(dir_source)/%.c | $$(dir $$@)
+	$(COMPILE.c) -MMD -MP $(OUTPUT_OPTION) $<
+
+$(dir_build)/subprojects/%.o: $(dir_subproj)/%.c | $$(dir $$@)
 	$(COMPILE.c) -MMD -MP $(OUTPUT_OPTION) $<
 
 .PRECIOUS: %/

@@ -5,9 +5,17 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include "libmobile/compat.h"
 
 #include "socket.h"
+
+// Attribute packed
+#if defined(__GNUC__)
+#define A_PACKED(...) __VA_ARGS__ __attribute__((packed))
+#elif defined(_MSC_VER)
+#define A_PACKED(...) _Pragma(pack(push, 1)) __VA_ARGS__ _Pragma(pack(pop))
+#else
+#define A_PACKED(...) __VA_ARGS__
+#endif
 
 enum bgb_cmd {
     BGB_CMD_VERSION = 1,

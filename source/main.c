@@ -10,8 +10,9 @@
 #include <locale.h>
 #include <pthread.h>
 #include <signal.h>
-#include "libmobile/mobile.h"
-#include "libmobile/inet_pton.h"
+
+#include <mobile.h>
+#include "../subprojects/libmobile/inet_pton.h"
 
 #include "socket.h"
 #include "bgblink.h"
@@ -341,6 +342,13 @@ int mobile_impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, 
     }
 
     return (int)len;
+}
+
+void mobile_impl_update_number(void *user, enum mobile_number type, const char *number)
+{
+    (void)user;
+    (void)type;
+    (void)number;
 }
 
 static enum mobile_action filter_actions(enum mobile_action action)

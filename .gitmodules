@@ -1,3 +1,3 @@
-[submodule "source/libmobile"]
-	path = source/libmobile
-	url = ../libmobile
+[submodule "subprojects/libmobile"]
+	path = subprojects/libmobile
+	url = https://github.com/REONTeam/libmobile
