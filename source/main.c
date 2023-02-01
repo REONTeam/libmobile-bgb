@@ -66,45 +66,45 @@ static struct sockaddr *convert_sockaddr(socklen_t *addrlen, union u_sockaddr *u
     }
 }
 
-void mobile_impl_debug_log(void *user, const char *line)
+static void impl_debug_log(void *user, const char *line)
 {
     (void)user;
     fprintf(stderr, "%s\n", line);
 }
 
-void mobile_impl_serial_disable(void *user)
+static void impl_serial_disable(void *user)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     pthread_mutex_lock(&mobile->mutex_serial);
 }
 
-void mobile_impl_serial_enable(void *user)
+static void impl_serial_enable(void *user)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     pthread_mutex_unlock(&mobile->mutex_serial);
 }
 
-bool mobile_impl_config_read(void *user, void *dest, const uintptr_t offset, const size_t size)
+static bool impl_config_read(void *user, void *dest, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     fseek(mobile->config, (long)offset, SEEK_SET);
     return fread(dest, 1, size, mobile->config) == size;
 }
 
-bool mobile_impl_config_write(void *user, const void *src, const uintptr_t offset, const size_t size)
+static bool impl_config_write(void *user, const void *src, const uintptr_t offset, const size_t size)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     fseek(mobile->config, (long)offset, SEEK_SET);
     return fwrite(src, 1, size, mobile->config) == size;
 }
 
-void mobile_impl_time_latch(void *user, enum mobile_timers timer)
+static void impl_time_latch(void *user, enum mobile_timers timer)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     mobile->bgb_clock_latch[timer] = mobile->bgb_clock;
 }
 
-bool mobile_impl_time_check_ms(void *user, enum mobile_timers timer, unsigned ms)
+static bool impl_time_check_ms(void *user, enum mobile_timers timer, unsigned ms)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     return
@@ -112,7 +112,7 @@ bool mobile_impl_time_check_ms(void *user, enum mobile_timers timer, unsigned ms
         (uint32_t)((double)ms * (1 << 21) / 1000);
 }
 
-bool mobile_impl_sock_open(void *user, unsigned conn, enum mobile_socktype socktype, enum mobile_addrtype addrtype, unsigned bindport)
+static bool impl_sock_open(void *user, unsigned conn, enum mobile_socktype socktype, enum mobile_addrtype addrtype, unsigned bindport)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     assert(mobile->sockets[conn] == -1);
@@ -182,7 +182,7 @@ bool mobile_impl_sock_open(void *user, unsigned conn, enum mobile_socktype sockt
     return true;
 }
 
-void mobile_impl_sock_close(void *user, unsigned conn)
+static void impl_sock_close(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     assert(mobile->sockets[conn] != -1);
@@ -190,7 +190,7 @@ void mobile_impl_sock_close(void *user, unsigned conn)
     mobile->sockets[conn] = -1;
 }
 
-int mobile_impl_sock_connect(void *user, unsigned conn, const struct mobile_addr *addr)
+static int impl_sock_connect(void *user, unsigned conn, const struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -225,7 +225,7 @@ int mobile_impl_sock_connect(void *user, unsigned conn, const struct mobile_addr
     return -1;
 }
 
-bool mobile_impl_sock_listen(void *user, unsigned conn)
+static bool impl_sock_listen(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -239,7 +239,7 @@ bool mobile_impl_sock_listen(void *user, unsigned conn)
     return true;
 }
 
-bool mobile_impl_sock_accept(void *user, unsigned conn)
+static bool impl_sock_accept(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -258,7 +258,7 @@ bool mobile_impl_sock_accept(void *user, unsigned conn)
     return true;
 }
 
-int mobile_impl_sock_send(void *user, unsigned conn, const void *data, const unsigned size, const struct mobile_addr *addr)
+static int impl_sock_send(void *user, unsigned conn, const void *data, const unsigned size, const struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -280,7 +280,7 @@ int mobile_impl_sock_send(void *user, unsigned conn, const void *data, const uns
     return (int)len;
 }
 
-int mobile_impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
+static int impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     int sock = mobile->sockets[conn];
@@ -344,13 +344,6 @@ int mobile_impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, 
     return (int)len;
 }
 
-void mobile_impl_update_number(void *user, enum mobile_number type, const char *number)
-{
-    (void)user;
-    (void)type;
-    (void)number;
-}
-
 static enum mobile_action filter_actions(enum mobile_action action)
 {
     // Turns actions that aren't relevant to the emulator into
@@ -366,7 +359,7 @@ static enum mobile_action filter_actions(enum mobile_action action)
     }
 }
 
-void *thread_mobile_loop(void *user)
+static void *thread_mobile_loop(void *user)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     for (;;) {
@@ -386,9 +379,10 @@ void *thread_mobile_loop(void *user)
             }
         }
     }
+    return NULL;
 }
 
-void bgb_loop_action(struct mobile_user *mobile)
+static void bgb_loop_action(struct mobile_user *mobile)
 {
     // Called for every byte transfer, unlock thread_mobile_loop if there's
     //   anything to be done.
@@ -407,7 +401,7 @@ void bgb_loop_action(struct mobile_user *mobile)
     pthread_mutex_unlock(&mobile->mutex_cond);
 }
 
-unsigned char bgb_loop_transfer(void *user, unsigned char c)
+static unsigned char bgb_loop_transfer(void *user, unsigned char c)
 {
     // Transfer a byte over the serial port
     struct mobile_user *mobile = (struct mobile_user *)user;
@@ -418,7 +412,7 @@ unsigned char bgb_loop_transfer(void *user, unsigned char c)
     return c;
 }
 
-void bgb_loop_timestamp(void *user, uint32_t t)
+static void bgb_loop_timestamp(void *user, uint32_t t)
 {
     // Update the timestamp sent by the emulator
     struct mobile_user *mobile = (struct mobile_user *)user;
@@ -426,15 +420,15 @@ void bgb_loop_timestamp(void *user, uint32_t t)
     bgb_loop_action(mobile);
 }
 
-bool signal_int_trig = false;
+static bool signal_int_trig = false;
 #if defined(__unix__)
-void signal_int(int signo)
+static void signal_int(int signo)
 {
     (void)signo;
     signal_int_trig = true;
 }
 #elif defined(__WIN32__)
-BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
+static BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
 {
     if (fdwCtrlType == CTRL_C_EVENT) {
         signal_int_trig = true;
@@ -444,15 +438,15 @@ BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
 }
 #endif
 
-char *program_name;
+static char *program_name;
 
-void show_help(void)
+static void show_help(void)
 {
     fprintf(stderr, "%s [-h] [-c config] [host [port]]\n", program_name);
     exit(EXIT_FAILURE);
 }
 
-void show_help_full(void)
+static void show_help_full(void)
 {
     fprintf(stderr, "%s [-h] [-c config] [options] [host [port]]\n", program_name);
     fprintf(stderr, "\n"
@@ -470,7 +464,7 @@ void show_help_full(void)
     exit(EXIT_SUCCESS);
 }
 
-void main_checkparam(char *argv[])
+static void main_checkparam(char *argv[])
 {
     if (!argv[1]) {
         fprintf(stderr, "Missing parameter for %s\n", argv[0]);
@@ -478,7 +472,7 @@ void main_checkparam(char *argv[])
     }
 }
 
-void main_parse_addr(struct mobile_addr *dest, char *argv[])
+static void main_parse_addr(struct mobile_addr *dest, char *argv[])
 {
     unsigned char ip[MOBILE_PTON_MAXLEN];
     int rc = mobile_pton(MOBILE_PTON_ANY, argv[1], ip);
@@ -500,7 +494,7 @@ void main_parse_addr(struct mobile_addr *dest, char *argv[])
     }
 }
 
-void main_set_port(struct mobile_addr *dest, unsigned port)
+static void main_set_port(struct mobile_addr *dest, unsigned port)
 {
     struct mobile_addr4 *dest4 = (struct mobile_addr4 *)dest;
     struct mobile_addr6 *dest6 = (struct mobile_addr6 *)dest;
@@ -516,7 +510,7 @@ void main_set_port(struct mobile_addr *dest, unsigned port)
     }
 }
 
-bool main_parse_hex(unsigned char *buf, char *str, unsigned size)
+static bool main_parse_hex(unsigned char *buf, char *str, unsigned size)
 {
     unsigned char x = 0;
     for (unsigned i = 0; i < size * 2; i++) {
@@ -667,9 +661,28 @@ int main(int argc, char *argv[])
     mobile->bgb_clock = 0;
     for (int i = 0; i < MOBILE_MAX_TIMERS; i++) mobile->bgb_clock_latch[i] = 0;
     for (int i = 0; i < MOBILE_MAX_CONNECTIONS; i++) mobile->sockets[i] = -1;
+    pthread_mutex_lock(&mobile->mutex_cond);
+    pthread_mutex_lock(&mobile->mutex_serial);
 
     // Initialize mobile library
     mobile_init(&mobile->adapter, mobile);
+
+    mobile_def_debug_log(&mobile->adapter, impl_debug_log);
+    mobile_def_serial_disable(&mobile->adapter, impl_serial_disable);
+    mobile_def_serial_enable(&mobile->adapter, impl_serial_enable);
+    mobile_def_config_read(&mobile->adapter, impl_config_read);
+    mobile_def_config_write(&mobile->adapter, impl_config_write);
+    mobile_def_time_latch(&mobile->adapter, impl_time_latch);
+    mobile_def_time_check_ms(&mobile->adapter, impl_time_check_ms);
+    mobile_def_sock_open(&mobile->adapter, impl_sock_open);
+    mobile_def_sock_close(&mobile->adapter, impl_sock_close);
+    mobile_def_sock_connect(&mobile->adapter, impl_sock_connect);
+    mobile_def_sock_listen(&mobile->adapter, impl_sock_listen);
+    mobile_def_sock_accept(&mobile->adapter, impl_sock_accept);
+    mobile_def_sock_send(&mobile->adapter, impl_sock_send);
+    mobile_def_sock_recv(&mobile->adapter, impl_sock_recv);
+
+    mobile_config_load(&mobile->adapter);
     mobile_config_set_device(&mobile->adapter, device, device_unmetered);
     mobile_config_set_dns(&mobile->adapter, &dns1, &dns2);
     mobile_config_set_p2p_port(&mobile->adapter, p2p_port);
@@ -677,13 +690,7 @@ int main(int argc, char *argv[])
     if (relay_token_update) {
         mobile_config_set_relay_token(&mobile->adapter, relay_token);
     }
-
-    // Process any initial events (to e.g. write the config)
-    enum mobile_action action;
-    while ((action = mobile_action_get(&mobile->adapter))
-            != MOBILE_ACTION_NONE) {
-        mobile_action_process(&mobile->adapter, action);
-    }
+    mobile_config_save(&mobile->adapter);
 
     // Initialize windows sockets
 #ifdef __WIN32__
@@ -723,9 +730,10 @@ int main(int argc, char *argv[])
 #endif
 
     // Start main mobile thread
-    pthread_mutex_lock(&mobile->mutex_cond);
+    mobile_start(&mobile->adapter);
     pthread_t mobile_thread;
-    int pthread_err = pthread_create(&mobile_thread, NULL, thread_mobile_loop, mobile);
+    int pthread_err = pthread_create(&mobile_thread, NULL, thread_mobile_loop,
+        mobile);
     if (pthread_err) {
         fprintf(stderr, "pthread_create: %s\n", strerror(pthread_err));
         goto error;
@@ -741,6 +749,7 @@ int main(int argc, char *argv[])
     // Stop the main mobile thread
     pthread_cancel(mobile_thread);
     pthread_join(mobile_thread, NULL);
+    mobile_stop(&mobile->adapter);
 
     // Close all sockets
     for (unsigned i = 0; i < MOBILE_MAX_CONNECTIONS; i++) {

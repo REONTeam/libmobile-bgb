@@ -7,7 +7,7 @@ dir_subproj := subprojects
 STRIP ?= strip
 
 CPPFLAGS := -I $(dir_subproj)/libmobile $(CPPFLAGS)
-CFLAGS := -Og -g -Wall -Wextra -std=gnu17 $(CFLAGS)
+CFLAGS := -Og -g -Wall -Wextra -Wpedantic -std=gnu17 $(CFLAGS)
 
 CFLAGS += -pthread #$(shell pkg-config --cflags ...)
 LDLIBS += -pthread #$(shell pkg-config --libs ...)
