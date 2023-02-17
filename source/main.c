@@ -21,7 +21,7 @@ struct mobile_user {
     pthread_mutex_t mutex_serial;
     pthread_mutex_t mutex_cond;
     pthread_cond_t cond;
-    struct mobile_adapter adapter;
+    struct mobile_adapter *adapter;
     enum mobile_action action;
     FILE *config;
     _Atomic uint32_t bgb_clock;
@@ -368,11 +368,11 @@ static void *thread_mobile_loop(void *user)
 
         // Process actions until we run out
         while (mobile->action != MOBILE_ACTION_NONE) {
-            mobile_action_process(&mobile->adapter, mobile->action);
+            mobile_action_process(mobile->adapter, mobile->action);
             fflush(stdout);
 
             mobile->action = filter_actions(
-                    mobile_action_get(&mobile->adapter));
+                    mobile_action_get(mobile->adapter));
             if (mobile->action != MOBILE_ACTION_NONE) {
                 // Sleep 10ms to avoid busylooping too hard
                 nanosleep(&(struct timespec){.tv_nsec = 10000000}, NULL);
@@ -391,7 +391,7 @@ static void bgb_loop_action(struct mobile_user *mobile)
     if (pthread_mutex_trylock(&mobile->mutex_cond) != 0) return;
     if (mobile->action == MOBILE_ACTION_NONE) {
         enum mobile_action action = filter_actions(
-                mobile_action_get(&mobile->adapter));
+                mobile_action_get(mobile->adapter));
 
         if (action != MOBILE_ACTION_NONE) {
             mobile->action = action;
@@ -406,7 +406,7 @@ static unsigned char bgb_loop_transfer(void *user, unsigned char c)
     // Transfer a byte over the serial port
     struct mobile_user *mobile = (struct mobile_user *)user;
     pthread_mutex_lock(&mobile->mutex_serial);
-    c = mobile_transfer(&mobile->adapter, c);
+    c = mobile_transfer(mobile->adapter, c);
     pthread_mutex_unlock(&mobile->mutex_serial);
     bgb_loop_action(mobile);
     return c;
@@ -665,32 +665,32 @@ int main(int argc, char *argv[])
     pthread_mutex_lock(&mobile->mutex_serial);
 
     // Initialize mobile library
-    mobile_init(&mobile->adapter, mobile);
+    mobile->adapter = mobile_new(mobile);
 
-    mobile_def_debug_log(&mobile->adapter, impl_debug_log);
-    mobile_def_serial_disable(&mobile->adapter, impl_serial_disable);
-    mobile_def_serial_enable(&mobile->adapter, impl_serial_enable);
-    mobile_def_config_read(&mobile->adapter, impl_config_read);
-    mobile_def_config_write(&mobile->adapter, impl_config_write);
-    mobile_def_time_latch(&mobile->adapter, impl_time_latch);
-    mobile_def_time_check_ms(&mobile->adapter, impl_time_check_ms);
-    mobile_def_sock_open(&mobile->adapter, impl_sock_open);
-    mobile_def_sock_close(&mobile->adapter, impl_sock_close);
-    mobile_def_sock_connect(&mobile->adapter, impl_sock_connect);
-    mobile_def_sock_listen(&mobile->adapter, impl_sock_listen);
-    mobile_def_sock_accept(&mobile->adapter, impl_sock_accept);
-    mobile_def_sock_send(&mobile->adapter, impl_sock_send);
-    mobile_def_sock_recv(&mobile->adapter, impl_sock_recv);
+    mobile_def_debug_log(mobile->adapter, impl_debug_log);
+    mobile_def_serial_disable(mobile->adapter, impl_serial_disable);
+    mobile_def_serial_enable(mobile->adapter, impl_serial_enable);
+    mobile_def_config_read(mobile->adapter, impl_config_read);
+    mobile_def_config_write(mobile->adapter, impl_config_write);
+    mobile_def_time_latch(mobile->adapter, impl_time_latch);
+    mobile_def_time_check_ms(mobile->adapter, impl_time_check_ms);
+    mobile_def_sock_open(mobile->adapter, impl_sock_open);
+    mobile_def_sock_close(mobile->adapter, impl_sock_close);
+    mobile_def_sock_connect(mobile->adapter, impl_sock_connect);
+    mobile_def_sock_listen(mobile->adapter, impl_sock_listen);
+    mobile_def_sock_accept(mobile->adapter, impl_sock_accept);
+    mobile_def_sock_send(mobile->adapter, impl_sock_send);
+    mobile_def_sock_recv(mobile->adapter, impl_sock_recv);
 
-    mobile_config_load(&mobile->adapter);
-    mobile_config_set_device(&mobile->adapter, device, device_unmetered);
-    mobile_config_set_dns(&mobile->adapter, &dns1, &dns2);
-    mobile_config_set_p2p_port(&mobile->adapter, p2p_port);
-    mobile_config_set_relay(&mobile->adapter, &relay);
+    mobile_config_load(mobile->adapter);
+    mobile_config_set_device(mobile->adapter, device, device_unmetered);
+    mobile_config_set_dns(mobile->adapter, &dns1, &dns2);
+    mobile_config_set_p2p_port(mobile->adapter, p2p_port);
+    mobile_config_set_relay(mobile->adapter, &relay);
     if (relay_token_update) {
-        mobile_config_set_relay_token(&mobile->adapter, relay_token);
+        mobile_config_set_relay_token(mobile->adapter, relay_token);
     }
-    mobile_config_save(&mobile->adapter);
+    mobile_config_save(mobile->adapter);
 
     // Initialize windows sockets
 #ifdef __WIN32__
@@ -730,7 +730,7 @@ int main(int argc, char *argv[])
 #endif
 
     // Start main mobile thread
-    mobile_start(&mobile->adapter);
+    mobile_start(mobile->adapter);
     pthread_t mobile_thread;
     int pthread_err = pthread_create(&mobile_thread, NULL, thread_mobile_loop,
         mobile);
@@ -749,7 +749,7 @@ int main(int argc, char *argv[])
     // Stop the main mobile thread
     pthread_cancel(mobile_thread);
     pthread_join(mobile_thread, NULL);
-    mobile_stop(&mobile->adapter);
+    mobile_stop(mobile->adapter);
 
     // Close all sockets
     for (unsigned i = 0; i < MOBILE_MAX_CONNECTIONS; i++) {
@@ -760,13 +760,17 @@ int main(int argc, char *argv[])
 #ifdef __WIN32__
     WSACleanup();
 #endif
+    free(mobile->adapter);
     free(mobile);
     fclose(config);
 
     return EXIT_SUCCESS;
 
 error:
-    if (mobile) free(mobile);
+    if (mobile) {
+        free(mobile->adapter);
+        free(mobile);
+    }
     if (config) fclose(config);
     return EXIT_FAILURE;
 }
