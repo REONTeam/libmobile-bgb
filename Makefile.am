@@ -5,8 +5,8 @@ SUBDIRS =
 AM_CPPFLAGS = -DNDEBUG
 AM_CFLAGS = -std=gnu11 -Wall -Wextra
 
-mobile_CPPFLAGS =
-mobile_CFLAGS = $(EXTRA_CFLAGS)
+mobile_CPPFLAGS = $(AM_CPPFLAGS)
+mobile_CFLAGS = $(AM_CFLAGS) $(EXTRA_CFLAGS)
 mobile_LDFLAGS = -static
 mobile_LDADD = $(EXTRA_LIBS)
 

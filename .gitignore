@@ -1,8 +1,7 @@
 /build/
 /releng/src/
 /releng/lib/
-/releng/mobile-linux
-/releng/mobile-windows.exe
+/releng/out/
 
 # Autotools artifacts
 /Makefile.in

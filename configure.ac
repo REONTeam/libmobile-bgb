@@ -12,16 +12,20 @@ EXTRA_CFLAGS=""
 AC_SUBST([EXTRA_LIBS])
 AC_SUBST([EXTRA_CFLAGS])
 
-# Enable -ffunction-sections -fdata-sections and -Wl,--gc-sections by default
-AC_CACHE_CHECK([whether the linker accepts -Wl,--gc-sections],
-    [my_cv_check_ldflags_gc_sections], [dnl
-    SAVE_LDFLAGS="$LDFLAGS"
-    LDFLAGS="-Wl,--gc-sections $LDFLAGS"
+AC_DEFUN([MY_CHECK_FLAG], [dnl
+AS_VAR_PUSHDEF([CHECK], [my_cv_check_m4_$1_$2])dnl
+AC_CACHE_CHECK([whether the compiler accepts $2 in $1], CHECK, [dnl
+    SAVE_FLAGS="$$1"; $1="$$1 $2"
     AC_LINK_IFELSE([AC_LANG_PROGRAM()],
-        [my_cv_check_ldflags_gc_sections=yes],
-        [my_cv_check_ldflags_gc_sections=no])
-    LDFLAGS="$SAVE_LDFLAGS"])
-AS_IF([test "$my_cv_check_ldflags_gc_sections" = yes], [dnl
+        [AS_VAR_SET(CHECK, [yes])], [AS_VAR_SET(CHECK, [no])])
+    $1="$SAVE_FLAGS"])
+AS_IF([test "$my_cv_check_$1_$2" = yes],
+    [m4_default([$3])], [m4_default([$4])])
+AS_VAR_POPDEF([CHECK])dnl
+])dnl
+
+# Enable -ffunction-sections -fdata-sections and -Wl,--gc-sections by default
+MY_CHECK_FLAG([LDFLAGS], [-Wl,--gc-sections], [dnl
     CFLAGS="-ffunction-sections -fdata-sections $CFLAGS"
     LDFLAGS="-Wl,--gc-sections $LDFLAGS"])
 
@@ -30,7 +34,7 @@ export CFLAGS LDFLAGS
 
 # Include libmobile library
 AC_ARG_WITH([system-libmobile], AS_HELP_STRING([--with-system-libmobile],
-    [use a shared version of libmobile rather than the bundled one]))
+    [use a shared copy of libmobile rather than the bundled one]))
 AS_IF([test "$with_system_libmobile" != no], [dnl
     PKG_CHECK_MODULES_STATIC([LIBMOBILE], [libmobile >= 0.2.0],
         [with_system_libmobile=yes],
@@ -42,12 +46,12 @@ AS_IF([test "$with_system_libmobile" = no], [dnl
 AM_CONDITIONAL([WITH_SYSTEM_LIBMOBILE], [test "$with_system_libmobile" = yes])
 
 # Add threading support
-AS_IF([test "$GCC" = yes], [dnl
+MY_CHECK_FLAG([CFLAGS], [-pthread], [dnl
     EXTRA_CFLAGS="$EXTRA_CFLAGS -pthread"])
 
 # Link windows libraries
 AS_CASE([$host_os], [mingw*], [dnl
-    AC_CHECK_LIB([ws2_32], [socket], [EXTRA_LIBS="$EXTRA_LIBS -lws2_32"])])
+    AC_CHECK_LIB([ws2_32], [main], [EXTRA_LIBS="$EXTRA_LIBS -lws2_32"])])
 
 AC_CONFIG_MACRO_DIRS([m4])
 AC_CONFIG_HEADERS([confdefs.h])
