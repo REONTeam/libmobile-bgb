@@ -73,6 +73,7 @@ bool bgb_init(struct bgb_state *state, int socket, bgb_transfer_cb callback_tran
     state->callback_timestamp = callback_timestamp;
     state->transfer_last = 0xD2;
     state->timestamp_last = 0;
+    state->set_status = false;
 
     // Handshake
     memcpy(&packet, &handshake, sizeof(packet));
