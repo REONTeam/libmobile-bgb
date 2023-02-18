@@ -442,24 +442,26 @@ static char *program_name;
 
 static void show_help(void)
 {
-    fprintf(stderr, "%s [-h] [-c config] [host [port]]\n", program_name);
+    fprintf(stderr, "%s [-h] [-c config] [options] [bgb_host [bgb_port]]\n",
+        program_name);
     exit(EXIT_FAILURE);
 }
 
 static void show_help_full(void)
 {
-    fprintf(stderr, "%s [-h] [-c config] [options] [host [port]]\n", program_name);
+    fprintf(stderr, "%s [-h] [-c config] [options] [bgb_host [bgb_port]]\n",
+        program_name);
     fprintf(stderr, "\n"
-        "-h|--help             Show this help\n"
-        "-c|--config config    Config file path\n"
-        "--device device       Adapter to emulate\n"
-        "--unmetered           Signal unmetered communications to Pokémon\n"
-        "--dns1 addr           Set DNS1 address override\n"
-        "--dns2 addr           Set DNS2 address override\n"
-        "--dns_port port       Set DNS port for address overrides\n"
-        "--p2p_port port       Port to use for relay-less P2P communications\n"
-        "--relay addr          Set relay server for P2P communications\n"
-        "--relay-token hex     Set relay token (or empty to clear)\n"
+        "-h|--help           Show this help\n"
+        "-c|--config config  Config file path\n"
+        "--device device     Adapter to emulate\n"
+        "--unmetered         Signal unmetered communications to Pokémon\n"
+        "--dns1 addr         Set DNS1 address override\n"
+        "--dns2 addr         Set DNS2 address override\n"
+        "--dns_port port     Set DNS port for address overrides\n"
+        "--p2p_port port     Port to use for relay-less P2P communications\n"
+        "--relay addr        Set relay server for P2P communications\n"
+        "--relay-token hex   Set relay token (or empty to clear)\n"
     );
     exit(EXIT_SUCCESS);
 }

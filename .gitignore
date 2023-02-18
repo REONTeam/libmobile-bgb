@@ -6,10 +6,10 @@
 # Autotools artifacts
 /Makefile.in
 /aclocal.m4
+/autoconf.h.in
+/autoconf.h.in~
 /autom4te.cache/
 /compile
-/confdefs.h.in
-/confdefs.h.in~
 /config.guess
 /config.sub
 /configure

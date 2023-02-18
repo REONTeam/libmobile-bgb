@@ -27,3 +27,6 @@ mobile_SOURCES = \
 	source/main.c \
 	source/socket.c \
 	source/socket.h
+
+EXTRA_DIST = \
+	meson.build

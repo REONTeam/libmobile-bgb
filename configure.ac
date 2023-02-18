@@ -54,7 +54,7 @@ AS_CASE([$host_os], [mingw*], [dnl
     AC_CHECK_LIB([ws2_32], [main], [EXTRA_LIBS="$EXTRA_LIBS -lws2_32"])])
 
 AC_CONFIG_MACRO_DIRS([m4])
-AC_CONFIG_HEADERS([confdefs.h])
+AC_CONFIG_HEADERS([autoconf.h])
 AC_CONFIG_FILES([Makefile])
 
 AC_OUTPUT

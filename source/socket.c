@@ -164,7 +164,7 @@ int socket_connect(const char *host, const char *port)
 		return -1;
 	}
 
-	int sock;
+	int sock = -1;
 	struct addrinfo *info;
 	for (info = result; info; info = info->ai_next) {
         errno = 0;
