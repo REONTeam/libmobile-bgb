@@ -196,7 +196,7 @@ class Mobile:
         while True:
             timeout = 0
             while self.bus.transfer(0x4B) != 0x99:
-                if timeout >= 100:
+                if timeout >= 200:
                     raise Exception("Mobile.transfer: wait timeout")
                 timeout += 1
                 time.sleep(0.01)
