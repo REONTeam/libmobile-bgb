@@ -27,6 +27,8 @@ struct mobile_user {
     _Atomic uint32_t bgb_clock;
     _Atomic uint32_t bgb_clock_latch[MOBILE_MAX_TIMERS];
     int sockets[MOBILE_MAX_CONNECTIONS];
+    char number_user[MOBILE_MAX_NUMBER_SIZE + 1];
+    char number_peer[MOBILE_MAX_NUMBER_SIZE + 1];
 };
 
 union u_sockaddr {
@@ -342,6 +344,49 @@ static int impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, 
     }
 
     return (int)len;
+}
+
+static void update_title(struct mobile_user *mobile)
+{
+#if defined(__unix__)
+    printf("\e]0;Mobile Adapter - ");
+
+    if (mobile->number_peer[0]) {
+        printf("Call: %s", mobile->number_peer);
+    } else {
+        printf("Disconnected");
+    }
+
+    if (mobile->number_user[0]) {
+        printf(" (Your number: %s)", mobile->number_user);
+    }
+
+    printf("\a");
+    fflush(stdout);
+#elif defined(__WIN32__)
+#warn "impl_update_number not implemented"
+#endif
+}
+
+static void impl_update_number(void *user, enum mobile_number type, const char *number)
+{
+    struct mobile_user *mobile = (struct mobile_user *)user;
+
+    char *dest = NULL;
+    switch (type) {
+        case MOBILE_NUMBER_USER: dest = mobile->number_user; break;
+        case MOBILE_NUMBER_PEER: dest = mobile->number_peer; break;
+        default: assert(false); return;
+    }
+
+    if (number) {
+        strncpy(dest, number, MOBILE_MAX_NUMBER_SIZE);
+        dest[MOBILE_MAX_NUMBER_SIZE] = '\0';
+    } else {
+        dest[0] = '\0';
+    }
+
+    update_title(mobile);
 }
 
 static enum mobile_action filter_actions(enum mobile_action action)
@@ -663,6 +708,9 @@ int main(int argc, char *argv[])
     mobile->bgb_clock = 0;
     for (int i = 0; i < MOBILE_MAX_TIMERS; i++) mobile->bgb_clock_latch[i] = 0;
     for (int i = 0; i < MOBILE_MAX_CONNECTIONS; i++) mobile->sockets[i] = -1;
+    mobile->number_user[0] = '\0';
+    mobile->number_peer[0] = '\0';
+
     pthread_mutex_lock(&mobile->mutex_cond);
     pthread_mutex_lock(&mobile->mutex_serial);
 
@@ -683,6 +731,7 @@ int main(int argc, char *argv[])
     mobile_def_sock_accept(mobile->adapter, impl_sock_accept);
     mobile_def_sock_send(mobile->adapter, impl_sock_send);
     mobile_def_sock_recv(mobile->adapter, impl_sock_recv);
+    mobile_def_update_number(mobile->adapter, impl_update_number);
 
     mobile_config_load(mobile->adapter);
     mobile_config_set_device(mobile->adapter, device, device_unmetered);
@@ -730,6 +779,7 @@ int main(int argc, char *argv[])
         goto error;
     }
 #endif
+    update_title(mobile);
 
     // Start main mobile thread
     mobile_start(mobile->adapter);
