@@ -25,7 +25,8 @@ class BGBMaster:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((host, port))
-        sock.settimeout(1)
+        if not os.getenv("TEST_CFG_NOEXE"):
+            sock.settimeout(1)
         sock.listen(1)
         self.sock = sock
         self.conn = None
@@ -77,7 +78,6 @@ class BGBMaster:
         self.sock.close()
         self.sock = None
         self.conn = conn
-        self.conn.setblocking(True)
 
         pack = self.recv()
         ver = {
@@ -368,11 +368,13 @@ class MobileProcess:
 
     def run(self):
         self.bgb = BGBMaster(port=self.port)
-        if os.getenv("TEST_CFG_NOPIPE"):
-            self.sub = subprocess.Popen(self.exe)
-        else:
-            self.sub = subprocess.Popen(self.exe, stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE)
+        print(*self.exe, file=sys.stderr)
+        if not os.getenv("TEST_CFG_NOEXE"):
+            if os.getenv("TEST_CFG_NOPIPE"):
+                self.sub = subprocess.Popen(self.exe)
+            else:
+                self.sub = subprocess.Popen(self.exe, stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE)
         self.bgb.accept()
         self.mob = Mobile(self.bgb)
 
