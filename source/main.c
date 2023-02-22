@@ -12,7 +12,7 @@
 #include <wchar.h>
 
 #include <mobile.h>
-#include "../subprojects/libmobile/inet_pton.h"
+#include <mobile_inet.h>
 
 #include "socket.h"
 #include "bgblink.h"
@@ -528,17 +528,17 @@ static void main_checkparam(char *argv[])
 
 static void main_parse_addr(struct mobile_addr *dest, char *argv[])
 {
-    unsigned char ip[MOBILE_PTON_MAXLEN];
-    int rc = mobile_pton(MOBILE_PTON_ANY, argv[1], ip);
+    unsigned char ip[MOBILE_INET_PTON_MAXLEN];
+    int rc = mobile_inet_pton(MOBILE_INET_PTON_ANY, argv[1], ip);
 
     struct mobile_addr4 *dest4 = (struct mobile_addr4 *)dest;
     struct mobile_addr6 *dest6 = (struct mobile_addr6 *)dest;
     switch (rc) {
-    case MOBILE_PTON_IPV4:
+    case MOBILE_INET_PTON_IPV4:
         dest4->type = MOBILE_ADDRTYPE_IPV4;
         memcpy(dest4->host, ip, sizeof(dest4->host));
         break;
-    case MOBILE_PTON_IPV6:
+    case MOBILE_INET_PTON_IPV6:
         dest6->type = MOBILE_ADDRTYPE_IPV6;
         memcpy(dest6->host, ip, sizeof(dest6->host));
         break;
