@@ -100,13 +100,13 @@ static bool impl_config_write(void *user, const void *src, const uintptr_t offse
     return fwrite(src, 1, size, mobile->config) == size;
 }
 
-static void impl_time_latch(void *user, enum mobile_timers timer)
+static void impl_time_latch(void *user, unsigned timer)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     mobile->bgb_clock_latch[timer] = mobile->bgb_clock;
 }
 
-static bool impl_time_check_ms(void *user, enum mobile_timers timer, unsigned ms)
+static bool impl_time_check_ms(void *user, unsigned timer, unsigned ms)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
     return
@@ -247,7 +247,7 @@ static bool impl_sock_accept(void *user, unsigned conn)
     int sock = mobile->sockets[conn];
     assert(sock != -1);
 
-    if (socket_hasdata(sock, 1000) <= 0) return false;
+    if (socket_hasdata(sock, 0) <= 0) return false;
     int newsock = accept(sock, NULL, NULL);
     if (newsock == -1) {
         socket_perror("accept");

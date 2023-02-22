@@ -755,7 +755,7 @@ class Tests(unittest.TestCase):
 
         with SimpleTCPServer("127.0.0.1", 1028) as t:
             # Start a connection to the server and send data
-            m.cmd_dial_telephone("127000000001")
+            m.cmd_dial_telephone("127.000.000.001")
             self.assertEqual(m.cmd_transfer_data(0, data), b"")
 
             # Accept the connection and echo the data
