@@ -1,7 +1,7 @@
 /build/
-/releng/src/
-/releng/lib/
-/releng/out/
+/releng/src
+/releng/lib
+/releng/out
 
 # Autotools artifacts
 /Makefile.in

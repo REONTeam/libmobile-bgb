@@ -364,7 +364,7 @@ static void update_title(struct mobile_user *mobile)
     printf("\a");
     fflush(stdout);
 #elif defined(__WIN32__)
-#warn "impl_update_number not implemented"
+#warning "impl_update_number not implemented"
 #endif
 }
 

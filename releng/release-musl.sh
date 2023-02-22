@@ -5,7 +5,7 @@ rm -rf release-musl
 mkdir -p release-musl
 cd release-musl
 
-source ../../tools/flags-release.sh
+. ../../tools/flags-release.sh
 export CC="$PWD/../lib/musl/bin/musl-gcc -m32"
 export REALGCC="x86_64-multilib-linux-gnu-gcc"
 export LDFLAGS="-Wl,-static -Wl,-melf_i386"

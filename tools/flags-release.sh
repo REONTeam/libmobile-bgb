@@ -1,3 +1,3 @@
 #!/bin/sh
 export CFLAGS="-Os -flto -fuse-linker-plugin"
-test "$(basename "$0")" = 'flags-release.sh' && exec "$@"
+test "$(basename "$0")" = 'flags-release.sh' && exec "$@" || true
