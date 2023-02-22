@@ -348,30 +348,30 @@ static int impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, 
 
 static void update_title(struct mobile_user *mobile)
 {
-    char title[0x100];
+    wchar_t title[0x100];
     size_t i = 0;
 
-    i += snprintf(title + i, sizeof(title) - i,
-        "Mobile Adapter - ");
+    i += swprintf(title + i, (sizeof(title) / sizeof(*title)) - i,
+        L"Mobile Adapter - ");
 
     if (mobile->number_peer[0]) {
-        i += snprintf(title + i, sizeof(title) - i,
-            "Call: %s", mobile->number_peer);
+        i += swprintf(title + i, (sizeof(title) / sizeof(*title)) - i,
+            L"Call: %s", mobile->number_peer);
     } else {
-        i += snprintf(title + i, sizeof(title) - i,
-            "Disconnected");
+        i += swprintf(title + i, (sizeof(title) / sizeof(*title)) - i,
+            L"Disconnected");
     }
 
     if (mobile->number_user[0]) {
-        i += snprintf(title + i, sizeof(title) - i,
-            " (Your number: %s)", mobile->number_user);
+        i += swprintf(title + i, (sizeof(title) / sizeof(*title)) - i,
+            L" (Your number: %s)", mobile->number_user);
     }
 
 #if defined(__unix__)
-    printf("\e]0;%s\a", title);
+    printf("\e]0;%ls\a", title);
     fflush(stdout);
 #elif defined(__WIN32__)
-    SetConsoleTitleA((LPSTR)title);
+    SetConsoleTitleW(title);
 #endif
 }
 

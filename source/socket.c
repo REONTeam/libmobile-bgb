@@ -31,7 +31,7 @@ void socket_perror(const char *func)
         putc('\n', stderr);
         return;
     }
-    fwprintf(stderr, L"%S", error);
+    fprintf(stderr, "%ls", error);
     LocalFree(error);
 #endif
 }
@@ -179,9 +179,7 @@ int socket_connect(const char *host, const char *port)
         socket_close(sock);
     }
     freeaddrinfo(result);
-    if (!info) {
-        socket_seterror(error);
-        return -1;
-    }
+    socket_seterror(error);
+    if (!info) return -1;
     return sock;
 }

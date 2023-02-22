@@ -8,7 +8,6 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #elif defined(__WIN32__)
-#define UNICODE
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
