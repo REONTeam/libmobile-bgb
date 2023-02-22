@@ -4,12 +4,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 #include <errno.h>
 #include <assert.h>
 #include <locale.h>
 #include <pthread.h>
 #include <signal.h>
+#include <wchar.h>
 
 #include <mobile.h>
 #include "../subprojects/libmobile/inet_pton.h"
