@@ -348,23 +348,30 @@ static int impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, 
 
 static void update_title(struct mobile_user *mobile)
 {
-#if defined(__unix__)
-    printf("\e]0;Mobile Adapter - ");
+    char title[0x100];
+    size_t i = 0;
+
+    i += snprintf(title + i, sizeof(title) - i,
+        "Mobile Adapter - ");
 
     if (mobile->number_peer[0]) {
-        printf("Call: %s", mobile->number_peer);
+        i += snprintf(title + i, sizeof(title) - i,
+            "Call: %s", mobile->number_peer);
     } else {
-        printf("Disconnected");
+        i += snprintf(title + i, sizeof(title) - i,
+            "Disconnected");
     }
 
     if (mobile->number_user[0]) {
-        printf(" (Your number: %s)", mobile->number_user);
+        i += snprintf(title + i, sizeof(title) - i,
+            " (Your number: %s)", mobile->number_user);
     }
 
-    printf("\a");
+#if defined(__unix__)
+    printf("\e]0;%s\a", title);
     fflush(stdout);
 #elif defined(__WIN32__)
-#warning "impl_update_number not implemented"
+    SetConsoleTitleA((LPSTR)title);
 #endif
 }
 
