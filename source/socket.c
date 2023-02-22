@@ -15,14 +15,14 @@
 // Print last socket-related error
 void socket_perror(const char *func)
 {
-    if (func) fprintf(stderr, "%s:", func);
+    if (func) fprintf(stderr, "%s: ", func);
 #if defined(__unix__)
     char error[0x100];
     if (strerror_r(errno, error, sizeof(error))) {
         putc('\n', stderr);
         return;
     }
-    fprintf(stderr, " %s\n", error);
+    fprintf(stderr, "%s\n", error);
 #elif defined(__WIN32__)
     LPWSTR error = NULL;
     if (!FormatMessageW(
@@ -31,7 +31,7 @@ void socket_perror(const char *func)
         putc('\n', stderr);
         return;
     }
-    fwprintf(stderr, L" %S", error);
+    fwprintf(stderr, L"%S", error);
     LocalFree(error);
 #endif
 }
@@ -147,33 +147,41 @@ int socket_setblocking(int socket, int flag)
 // Connect a socket to a user-provided hostname and port
 int socket_connect(const char *host, const char *port)
 {
-	struct addrinfo hints = {
-		.ai_family = AF_UNSPEC,
-		.ai_socktype = SOCK_STREAM,
+    struct addrinfo hints = {
+        .ai_family = AF_UNSPEC,
+        .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP
-	};
-	struct addrinfo *result;
-	int gai_errno = getaddrinfo(host, port, &hints, &result);
-	if (gai_errno) {
+    };
+    struct addrinfo* result;
+    int gai_errno = getaddrinfo(host, port, &hints, &result);
+    if (gai_errno) {
 #if defined(__unix__)
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai_errno));
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai_errno));
 #elif defined(__WIN32__)
         fprintf(stderr, "getaddrinfo: Error %d: ", gai_errno);
         socket_perror(NULL);
 #endif
-		return -1;
-	}
+        return -1;
+    }
 
-	int sock = -1;
-	struct addrinfo *info;
-	for (info = result; info; info = info->ai_next) {
+    int sock = -1;
+    int error = 0;
+    struct addrinfo* info;
+    for (info = result; info; info = info->ai_next) {
         errno = 0;
         sock = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
-		if (sock == -1) continue;
-		if (connect(sock, info->ai_addr, info->ai_addrlen) == 0) break;
-		socket_close(sock);
-	}
-	freeaddrinfo(result);
-	if (!info) return -1;
+        if (sock == -1) {
+            socket_perror("socket");
+            continue;
+        }
+        if (connect(sock, info->ai_addr, info->ai_addrlen) == 0) break;
+        error = socket_geterror();
+        socket_close(sock);
+    }
+    freeaddrinfo(result);
+    if (!info) {
+        socket_seterror(error);
+        return -1;
+    }
     return sock;
 }

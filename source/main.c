@@ -221,7 +221,7 @@ static int impl_sock_connect(void *user, unsigned conn, const struct mobile_addr
     socket_straddr(sock_host, sizeof(sock_host), sock_port, sock_addr,
         sock_addrlen);
     socket_seterror(err);
-    fprintf(stderr, "Could not connect (ip %s port %s):",
+    fprintf(stderr, "Could not connect (ip %s port %s): ",
         sock_host, sock_port);
     socket_perror(NULL);
     return -1;
@@ -723,7 +723,6 @@ int main(int argc, char *argv[])
 
     // Initialize mobile library
     mobile->adapter = mobile_new(mobile);
-
     mobile_def_debug_log(mobile->adapter, impl_debug_log);
     mobile_def_serial_disable(mobile->adapter, impl_serial_disable);
     mobile_def_serial_enable(mobile->adapter, impl_serial_enable);
@@ -763,7 +762,7 @@ int main(int argc, char *argv[])
     // Connect to the emulator
     int bgb_sock = socket_connect(host, port);
     if (bgb_sock == -1) {
-        fprintf(stderr, "Could not connect (%s:%s):", host, port);
+        fprintf(stderr, "Could not connect (%s:%s): ", host, port);
         socket_perror(NULL);
         goto error;
     }
