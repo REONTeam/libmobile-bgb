@@ -25,7 +25,7 @@ deps += dependency('threads')
 
 if host_machine.system() == 'windows'
   deps += cc.find_library('ws2_32')
-  c_args += ['-DUNICODE', '-D_WIN32_WINNT=0x0501']
+  c_args += ['-DUNICODE', '-D_UNICODE', '-D_WIN32_WINNT=0x0501']
 endif
 
 executable('mobile',
