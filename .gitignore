@@ -1,4 +1,9 @@
 /build/
+/mobile
+/config.bin
+/config_test.bin
+/config_test_p2.bin
+
 /releng/src
 /releng/lib
 /releng/out
@@ -19,3 +24,14 @@
 /ltmain.sh
 /m4/
 /missing
+
+# In-source build artifacts
+*.o
+.deps/
+.dirstamp
+/Makefile
+/autoconf.h
+/config.log
+/config.status
+/libtool
+stamp-*

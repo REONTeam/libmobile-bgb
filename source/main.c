@@ -80,8 +80,9 @@ static void impl_serial_disable(void *user)
     pthread_mutex_lock(&mobile->mutex_serial);
 }
 
-static void impl_serial_enable(void *user)
+static void impl_serial_enable(void *user, bool mode_32bit)
 {
+    (void)mode_32bit;
     struct mobile_user *mobile = (struct mobile_user *)user;
     pthread_mutex_unlock(&mobile->mutex_serial);
 }
