@@ -474,17 +474,17 @@ static void bgb_loop_timestamp(void *user, uint32_t t)
 }
 
 static bool signal_int_trig = false;
-#if defined(__unix__)
 static void signal_int(int signo)
 {
     (void)signo;
     signal_int_trig = true;
 }
-#elif defined(__WIN32__)
+#ifdef __WIN32__
 static BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
 {
-    if (fdwCtrlType == CTRL_C_EVENT) {
-        signal_int_trig = true;
+    if (fdwCtrlType == CTRL_C_EVENT ||
+            fdwCtrlType == CTRL_CLOSE_EVENT) {
+        signal_int(SIGINT);
         return TRUE;
     }
     return FALSE;

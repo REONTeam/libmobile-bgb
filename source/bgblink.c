@@ -17,6 +17,10 @@
 #define A_PACKED(...) __VA_ARGS__
 #endif
 
+#define BGB_STATUS_RUNNING (1 << 0)
+#define BGB_STATUS_PAUSED (1 << 1)
+#define BGB_STATUS_SUPPORTRECONNECT (1 << 2)
+
 enum bgb_cmd {
     BGB_CMD_VERSION = 1,
     BGB_CMD_JOYPAD = 101,
@@ -86,7 +90,8 @@ bool bgb_init(struct bgb_state *state, int socket, bgb_transfer_cb callback_tran
 
     // Send initial status
     packet.cmd = BGB_CMD_STATUS;
-    packet.b2 = 3;
+    packet.b2 = BGB_STATUS_RUNNING | BGB_STATUS_PAUSED |
+        BGB_STATUS_SUPPORTRECONNECT;
     packet.b3 = 0;
     packet.b4 = 0;
     packet.timestamp = 0;
@@ -135,7 +140,7 @@ bool bgb_loop(struct bgb_state *state)
     case BGB_CMD_STATUS:
         if (!state->set_status) {
             packet.cmd = BGB_CMD_STATUS;
-            packet.b2 = 1;
+            packet.b2 = BGB_STATUS_RUNNING | BGB_STATUS_SUPPORTRECONNECT;
             packet.b3 = 0;
             packet.b4 = 0;
             packet.timestamp = 0;
