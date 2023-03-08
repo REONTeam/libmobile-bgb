@@ -77,7 +77,7 @@ bool bgb_init(struct bgb_state *state, int socket, bgb_transfer_cb callback_tran
     state->callback_timestamp = callback_timestamp;
     state->transfer_last = 0xD2;
     state->timestamp_last = 0;
-    state->set_status = false;
+    state->timestamp_init = false;
 
     // Handshake
     memcpy(&packet, &handshake, sizeof(packet));
@@ -95,6 +95,20 @@ bool bgb_init(struct bgb_state *state, int socket, bgb_transfer_cb callback_tran
     packet.b3 = 0;
     packet.b4 = 0;
     packet.timestamp = 0;
+    if (!bgb_send(socket, &packet)) return false;
+
+    // Expect a status packet back
+    if (!bgb_recv(socket, &packet)) return false;
+    if (packet.cmd != BGB_CMD_STATUS) {
+        fprintf(stderr, "bgb_init: unexpected packet (1)\n");
+        return false;
+    }
+
+    // Unpause the emulator
+    packet.cmd = BGB_CMD_STATUS;
+    packet.b2 = BGB_STATUS_RUNNING | BGB_STATUS_SUPPORTRECONNECT;
+    packet.b3 = 0;
+    packet.b4 = 0;
     if (!bgb_send(socket, &packet)) return false;
 
     return true;
@@ -122,8 +136,10 @@ bool bgb_loop(struct bgb_state *state)
         packet.b4 = 0;
         packet.timestamp = 0;
         if (!bgb_send(state->socket, &packet)) return false;
-        state->transfer_last =
-            state->callback_transfer(state->user, transfer_cur);
+        if (state->callback_transfer) {
+            state->transfer_last =
+                state->callback_transfer(state->user, transfer_cur);
+        }
         break;
 
     case BGB_CMD_SYNC2:
@@ -138,15 +154,7 @@ bool bgb_loop(struct bgb_state *state)
         break;
 
     case BGB_CMD_STATUS:
-        if (!state->set_status) {
-            packet.cmd = BGB_CMD_STATUS;
-            packet.b2 = BGB_STATUS_RUNNING | BGB_STATUS_SUPPORTRECONNECT;
-            packet.b3 = 0;
-            packet.b4 = 0;
-            packet.timestamp = 0;
-            if (!bgb_send(state->socket, &packet)) return false;
-            state->set_status = true;
-        }
+        // Ignore, we've already sent a status packet
         break;
 
     default:
@@ -156,6 +164,12 @@ bool bgb_loop(struct bgb_state *state)
     }
 
     if (state->callback_timestamp) {
+        if (!state->timestamp_init) {
+            state->callback_timestamp(state->user, timestamp_cur);
+            state->timestamp_last = timestamp_cur;
+            state->timestamp_init = true;
+        }
+
         // Attempt to detect the clock going back in time
         // This is probably a BGB bug, caused by enabling some options,
         //   such as the "break on ld d,d" option.

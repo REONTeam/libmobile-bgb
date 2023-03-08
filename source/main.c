@@ -24,8 +24,9 @@ struct mobile_user {
     struct mobile_adapter *adapter;
     enum mobile_action action;
     FILE *config;
-    _Atomic uint32_t bgb_clock;
-    _Atomic uint32_t bgb_clock_latch[MOBILE_MAX_TIMERS];
+    uint32_t bgb_clock;
+    uint32_t bgb_clock_init;
+    uint32_t bgb_clock_latch[MOBILE_MAX_TIMERS];
     int sockets[MOBILE_MAX_CONNECTIONS];
     char number_user[MOBILE_MAX_NUMBER_SIZE + 1];
     char number_peer[MOBILE_MAX_NUMBER_SIZE + 1];
@@ -321,8 +322,8 @@ static int impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, 
         // zero-length datagrams.
         int sock_type = 0;
         socklen_t sock_type_len = sizeof(sock_type);
-        getsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&sock_type,
-            &sock_type_len);
+        assert(getsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&sock_type,
+            &sock_type_len) == 0);
         if (sock_type == SOCK_STREAM) return -2;
     }
 
@@ -397,6 +398,24 @@ static void impl_update_number(void *user, enum mobile_number type, const char *
     update_title(mobile);
 }
 
+static volatile bool signal_int_trig = false;
+static void signal_int(int signo)
+{
+    (void)signo;
+    signal_int_trig = true;
+}
+#ifdef __WIN32__
+static BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
+{
+    if (fdwCtrlType == CTRL_C_EVENT ||
+            fdwCtrlType == CTRL_CLOSE_EVENT) {
+        signal_int(SIGINT);
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif
+
 static enum mobile_action filter_actions(enum mobile_action action)
 {
     // Turns actions that aren't relevant to the emulator into
@@ -415,21 +434,45 @@ static enum mobile_action filter_actions(enum mobile_action action)
 static void *thread_mobile_loop(void *user)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    for (;;) {
-        // Implicitly unlocks mutex_cond while waiting
-        pthread_cond_wait(&mobile->cond, &mobile->mutex_cond);
+    struct timespec now;
+    while (!signal_int_trig) {
+        // Get current time
+        clock_gettime(CLOCK_MONOTONIC, &now);
 
-        // Process actions until we run out
-        while (mobile->action != MOBILE_ACTION_NONE) {
-            mobile_action_process(mobile->adapter, mobile->action);
-            fflush(stdout);
-
-            mobile->action = filter_actions(
-                    mobile_action_get(mobile->adapter));
-            if (mobile->action != MOBILE_ACTION_NONE) {
-                // Sleep 10ms to avoid busylooping too hard
-                nanosleep(&(struct timespec){.tv_nsec = 10000000}, NULL);
+        if (mobile->action == MOBILE_ACTION_NONE) {
+            struct timespec to = now;
+            to.tv_nsec += 100000000;  // 100ms
+            if (to.tv_nsec > 1000000000) {
+                to.tv_nsec -= 1000000000;
+                to.tv_sec += 1;
             }
+
+            // Implicitly unlocks mutex_cond while waiting
+            pthread_cond_timedwait(&mobile->cond, &mobile->mutex_cond, &to);
+        }
+
+        // Fetch action if none exists
+        if (mobile->action == MOBILE_ACTION_NONE) {
+            mobile->action =
+                filter_actions(mobile_action_get(mobile->adapter));
+        }
+
+        // Process action
+        if (mobile->action != MOBILE_ACTION_NONE) {
+            mobile_action_process(mobile->adapter, mobile->action);
+
+            // Sleep 10ms to avoid busylooping too hard
+            struct timespec to = now;
+            to.tv_nsec += 10000000;  // 10ms
+            if (to.tv_nsec > 1000000000) {
+                to.tv_nsec -= 1000000000;
+                to.tv_sec += 1;
+            }
+            clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &to, NULL);
+
+            // Fetch next action
+            mobile->action =
+                filter_actions(mobile_action_get(mobile->adapter));
         }
     }
     return NULL;
@@ -443,13 +486,10 @@ static void bgb_loop_action(struct mobile_user *mobile)
     // If the thread isn't doing anything, queue up the next action.
     if (pthread_mutex_trylock(&mobile->mutex_cond) != 0) return;
     if (mobile->action == MOBILE_ACTION_NONE) {
-        enum mobile_action action = filter_actions(
-                mobile_action_get(mobile->adapter));
-
-        if (action != MOBILE_ACTION_NONE) {
-            mobile->action = action;
-            pthread_cond_signal(&mobile->cond);
-        }
+        mobile->action = filter_actions(mobile_action_get(mobile->adapter));
+    }
+    if (mobile->action != MOBILE_ACTION_NONE) {
+        pthread_cond_broadcast(&mobile->cond);
     }
     pthread_mutex_unlock(&mobile->mutex_cond);
 }
@@ -473,23 +513,13 @@ static void bgb_loop_timestamp(void *user, uint32_t t)
     bgb_loop_action(mobile);
 }
 
-static bool signal_int_trig = false;
-static void signal_int(int signo)
+static void bgb_loop_timestamp_init(void *user, uint32_t t)
 {
-    (void)signo;
-    signal_int_trig = true;
+    // Initialize the clock
+    struct mobile_user *mobile = (struct mobile_user *)user;
+    mobile->bgb_clock = t;
+    mobile->bgb_clock_init = true;
 }
-#ifdef __WIN32__
-static BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
-{
-    if (fdwCtrlType == CTRL_C_EVENT ||
-            fdwCtrlType == CTRL_CLOSE_EVENT) {
-        signal_int(SIGINT);
-        return TRUE;
-    }
-    return FALSE;
-}
-#endif
 
 static char *program_name;
 
@@ -710,14 +740,20 @@ int main(int argc, char *argv[])
     }
     mobile->mutex_serial = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     mobile->mutex_cond = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-    mobile->cond = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
     mobile->action = MOBILE_ACTION_NONE;
     mobile->config = config;
     mobile->bgb_clock = 0;
+    mobile->bgb_clock_init = false;
     for (int i = 0; i < MOBILE_MAX_TIMERS; i++) mobile->bgb_clock_latch[i] = 0;
     for (int i = 0; i < MOBILE_MAX_CONNECTIONS; i++) mobile->sockets[i] = -1;
     mobile->number_user[0] = '\0';
     mobile->number_peer[0] = '\0';
+
+    // Initialize condition with attributes
+    pthread_condattr_t cond_attr;
+    assert(pthread_condattr_init(&cond_attr) == 0);
+    assert(pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC) == 0);
+    assert(pthread_cond_init(&mobile->cond, &cond_attr) == 0);
 
     pthread_mutex_lock(&mobile->mutex_cond);
     pthread_mutex_lock(&mobile->mutex_serial);
@@ -788,6 +824,18 @@ int main(int argc, char *argv[])
 #endif
     update_title(mobile);
 
+    // Connect to the emulator
+    struct bgb_state bgb_state;
+    if (!bgb_init(&bgb_state, bgb_sock, bgb_loop_transfer, bgb_loop_timestamp,
+            mobile)) {
+        goto error;
+    }
+
+    // Wait for the timestamp to be initialized
+    bgb_state.callback_timestamp = bgb_loop_timestamp_init;
+    while (!mobile->bgb_clock_init) if (!bgb_loop(&bgb_state)) goto error;
+    bgb_state.callback_timestamp = bgb_loop_timestamp;
+
     // Start main mobile thread
     mobile_start(mobile->adapter);
     pthread_t mobile_thread;
@@ -798,15 +846,11 @@ int main(int argc, char *argv[])
         goto error;
     }
 
-    // Handle the emulator connection
-    struct bgb_state bgb_state;
-    if (bgb_init(&bgb_state, bgb_sock, bgb_loop_transfer, bgb_loop_timestamp,
-            mobile)) {
-        while (!signal_int_trig) if (!bgb_loop(&bgb_state)) break;
-    }
+    while (!signal_int_trig) if (!bgb_loop(&bgb_state)) break;
+    signal_int_trig = true;
 
-    // Stop the main mobile thread
-    pthread_cancel(mobile_thread);
+    // Wait for the mobile thread to finish
+    pthread_cond_broadcast(&mobile->cond);
     pthread_join(mobile_thread, NULL);
     mobile_stop(mobile->adapter);
 

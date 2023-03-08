@@ -17,7 +17,7 @@ struct bgb_state {
     // private
     unsigned char transfer_last;
     uint32_t timestamp_last;
-    bool set_status;
+    bool timestamp_init;
 };
 
 void socket_perror(const char *func);

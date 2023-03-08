@@ -79,7 +79,10 @@ class BGBMaster:
         self.sock = None
         self.conn = conn
 
+        # Expect handshake
         pack = self.recv()
+
+        # Send handshake
         ver = {
             "cmd": BGBMaster.BGB_CMD_VERSION,
             "b2": 1,
@@ -91,6 +94,13 @@ class BGBMaster:
             if ver[x] != pack[x]:
                 return False
         self.send(ver)
+
+        # Send status
+        stat = {
+            "cmd": BGBMaster.BGB_CMD_STATUS,
+            "b2": 1,
+        }
+        self.send(stat)
 
     def handle(self):
         pack = self.recv()
