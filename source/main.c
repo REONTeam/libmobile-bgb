@@ -416,19 +416,10 @@ static BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
 }
 #endif
 
-static enum mobile_action filter_actions(enum mobile_action action)
+static enum mobile_action filter_actions(enum mobile_action actions)
 {
-    // Turns actions that aren't relevant to the emulator into
-    //   MOBILE_ACTION_NONE
-
-    switch (action) {
-    // In an emulator, serial can't desync
-    case MOBILE_ACTION_RESET_SERIAL:
-        return MOBILE_ACTION_NONE;
-
-    default:
-        return action;
-    }
+    // Filter out the actions that aren't relevant to this emulator
+    return actions & ~MOBILE_ACTION_RESET_SERIAL;
 }
 
 static void *thread_mobile_loop(void *user)
@@ -454,12 +445,12 @@ static void *thread_mobile_loop(void *user)
         // Fetch action if none exists
         if (mobile->action == MOBILE_ACTION_NONE) {
             mobile->action =
-                filter_actions(mobile_action_get(mobile->adapter));
+                filter_actions(mobile_actions_get(mobile->adapter));
         }
 
         // Process action
         if (mobile->action != MOBILE_ACTION_NONE) {
-            mobile_action_process(mobile->adapter, mobile->action);
+            mobile_actions_process(mobile->adapter, mobile->action);
 
             // Sleep 10ms to avoid busylooping too hard
             struct timespec to = now;
@@ -472,7 +463,7 @@ static void *thread_mobile_loop(void *user)
 
             // Fetch next action
             mobile->action =
-                filter_actions(mobile_action_get(mobile->adapter));
+                filter_actions(mobile_actions_get(mobile->adapter));
         }
     }
     return NULL;
@@ -486,7 +477,7 @@ static void bgb_loop_action(struct mobile_user *mobile)
     // If the thread isn't doing anything, queue up the next action.
     if (pthread_mutex_trylock(&mobile->mutex_cond) != 0) return;
     if (mobile->action == MOBILE_ACTION_NONE) {
-        mobile->action = filter_actions(mobile_action_get(mobile->adapter));
+        mobile->action = filter_actions(mobile_actions_get(mobile->adapter));
     }
     if (mobile->action != MOBILE_ACTION_NONE) {
         pthread_cond_broadcast(&mobile->cond);
