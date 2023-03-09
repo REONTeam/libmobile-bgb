@@ -1,6 +1,6 @@
 AC_PREREQ([2.71])
 LT_PREREQ([2.4.6])
-AC_INIT([libmobile-bgb], [0.2.0])
+AC_INIT([libmobile-bgb], [0.2.1])
 AM_INIT_AUTOMAKE([1.16.5 -Wall foreign subdir-objects])
 AM_SILENT_RULES([yes])
 
