@@ -322,8 +322,11 @@ static int impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, 
         // zero-length datagrams.
         int sock_type = 0;
         socklen_t sock_type_len = sizeof(sock_type);
-        assert(getsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&sock_type,
-            &sock_type_len) == 0);
+        if (getsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&sock_type,
+                &sock_type_len) == -1) {
+            socket_perror("getsockopt");
+            return -1;
+        }
         if (sock_type == SOCK_STREAM) return -2;
     }
 
@@ -741,10 +744,14 @@ int main(int argc, char *argv[])
     mobile->number_peer[0] = '\0';
 
     // Initialize condition with attributes
+    int pt_err; (void)pt_err;
     pthread_condattr_t cond_attr;
-    assert(pthread_condattr_init(&cond_attr) == 0);
-    assert(pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC) == 0);
-    assert(pthread_cond_init(&mobile->cond, &cond_attr) == 0);
+    pt_err = pthread_condattr_init(&cond_attr);
+    assert(!pt_err);
+    pt_err = pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC);
+    assert(!pt_err);
+    pt_err = pthread_cond_init(&mobile->cond, &cond_attr);
+    assert(!pt_err);
 
     pthread_mutex_lock(&mobile->mutex_cond);
     pthread_mutex_lock(&mobile->mutex_serial);
