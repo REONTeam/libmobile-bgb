@@ -31,6 +31,7 @@ class BGBMaster:
         self.sock = sock
         self.conn = None
 
+        self.time = int(time.time() * 2**21)
         self.timeoffset = 0
 
     def close(self):
@@ -119,13 +120,25 @@ class BGBMaster:
 
     def add_time(self, offset):
         # Offset in seconds
-        self.timeoffset += offset
+        self.timeoffset += int(offset * 2**21)
         self.update()
 
     def get_time(self):
-        return int((time.time() + self.timeoffset) * (1 << 21)) & 0x7FFFFFFF
+        return int(self.time + self.timeoffset) & 0x7FFFFFFF
+
+    def forward_time(self):
+        cur = int(time.time() * 2**21)
+        while self.time + 0x1000 < cur:
+            self.time += 0x1000
+            pack = {
+                "cmd": BGBMaster.BGB_CMD_SYNC3,
+                "timestamp": self.get_time(),
+            }
+            self.send(pack)
+        self.time = cur
 
     def update(self):
+        self.forward_time()
         pack = {
             "cmd": BGBMaster.BGB_CMD_SYNC3,
             "timestamp": self.get_time(),
@@ -133,6 +146,7 @@ class BGBMaster:
         self.send(pack)
 
     def transfer(self, byte):
+        self.forward_time()
         pack = {
             "cmd": BGBMaster.BGB_CMD_SYNC1,
             "b2": byte,
