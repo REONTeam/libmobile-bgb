@@ -24,8 +24,8 @@ struct mobile_user {
     struct mobile_adapter *adapter;
     enum mobile_action action;
     FILE *config;
-    uint32_t bgb_clock;
-    uint32_t bgb_clock_init;
+    _Atomic volatile uint32_t bgb_clock;
+    bool bgb_clock_init;
     uint32_t bgb_clock_latch[MOBILE_MAX_TIMERS];
     int sockets[MOBILE_MAX_CONNECTIONS];
     char number_user[MOBILE_MAX_NUMBER_SIZE + 1];
