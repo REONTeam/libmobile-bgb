@@ -24,6 +24,7 @@ struct mobile_user {
     struct mobile_adapter *adapter;
     enum mobile_action action;
     FILE *config;
+    _Atomic volatile bool reset;
     _Atomic volatile uint32_t bgb_clock;
     bool bgb_clock_init;
     uint32_t bgb_clock_latch[MOBILE_MAX_TIMERS];
@@ -445,6 +446,13 @@ static void *thread_mobile_loop(void *user)
             pthread_cond_timedwait(&mobile->cond, &mobile->mutex_cond, &to);
         }
 
+        // Reset the adapter if requested
+        if (mobile->reset) {
+            mobile_stop(mobile->adapter);
+            mobile_start(mobile->adapter);
+            mobile->reset = false;
+        }
+
         // Fetch action if none exists
         if (mobile->action == MOBILE_ACTION_NONE) {
             mobile->action =
@@ -479,6 +487,14 @@ static void bgb_loop_action(struct mobile_user *mobile)
 
     // If the thread isn't doing anything, queue up the next action.
     if (pthread_mutex_trylock(&mobile->mutex_cond) != 0) return;
+
+    // If a reset was triggered, simply wake up the thread
+    if (mobile->reset) {
+        pthread_cond_broadcast(&mobile->cond);
+        pthread_mutex_unlock(&mobile->mutex_cond);
+        return;
+    }
+
     if (mobile->action == MOBILE_ACTION_NONE) {
         mobile->action = filter_actions(mobile_actions_get(mobile->adapter));
     }
@@ -503,6 +519,15 @@ static void bgb_loop_timestamp(void *user, uint32_t t)
 {
     // Update the timestamp sent by the emulator
     struct mobile_user *mobile = (struct mobile_user *)user;
+
+    // Bail if the time difference is too big. This happens whenever the
+    //   emulator is reset, a new game is loaded, or a save state is loaded.
+    uint32_t diff = (t - mobile->bgb_clock) & 0x7FFFFFFF;
+    if (diff > 0x1000) {
+        fprintf(stderr, "[BGB] Emulator reset detected! Resetting adapter\n");
+        mobile->reset = true;
+    }
+
     mobile->bgb_clock = t;
     bgb_loop_action(mobile);
 }
@@ -736,6 +761,7 @@ int main(int argc, char *argv[])
     mobile->mutex_cond = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     mobile->action = MOBILE_ACTION_NONE;
     mobile->config = config;
+    mobile->reset = false;
     mobile->bgb_clock = 0;
     mobile->bgb_clock_init = false;
     for (int i = 0; i < MOBILE_MAX_TIMERS; i++) mobile->bgb_clock_latch[i] = 0;

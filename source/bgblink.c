@@ -174,8 +174,8 @@ bool bgb_loop(struct bgb_state *state)
         // This is probably a BGB bug, caused by enabling some options,
         //   such as the "break on ld d,d" option.
         uint32_t diff = (state->timestamp_last - timestamp_cur) & 0x7FFFFFFF;
-        if (diff != 0 && diff < 0x100) {
-            fprintf(stderr, "[BUG] Emulator went back in time? "
+        if (diff != 0 && diff <= 0x100) {
+            fprintf(stderr, "[BGB] Emulator went back in time? "
                 "old: 0x%08X; new: 0x%08X\n",
                 state->timestamp_last, timestamp_cur);
             timestamp_cur = state->timestamp_last;
