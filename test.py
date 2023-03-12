@@ -160,7 +160,7 @@ class BGBMaster:
             if res[0] == BGBMaster.BGB_CMD_SYNC2:
                 byte_ret = res[1]
                 break
-        # print("%02X %02X" % (byte, byte_ret))
+        # print("%02X %02X" % (byte, byte_ret), file=sys.stderr)
         return byte_ret
 
 
@@ -291,6 +291,8 @@ class Mobile:
 
     def cmd_end(self):
         self.transfer_noreply(Mobile.MOBILE_COMMAND_END)
+        self.bus.transfer(0x4B)
+        time.sleep(0.01)
         self.mode_32bit = False
 
     def cmd_tel(self, number, prot=0):
@@ -329,6 +331,8 @@ class Mobile:
 
     def cmd_reinit(self):
         self.transfer_noreply(Mobile.MOBILE_COMMAND_REINIT)
+        self.bus.transfer(0x4B)
+        time.sleep(0.01)
         self.mode_32bit = False
 
     def cmd_check_status(self):
@@ -344,6 +348,8 @@ class Mobile:
 
     def cmd_change_clock(self, mode_32bit=True):
         self.transfer_noreply(Mobile.MOBILE_COMMAND_CHANGE_CLOCK, mode_32bit)
+        self.bus.transfer(0x4B)
+        time.sleep(0.01)
         self.mode_32bit = mode_32bit
 
     def cmd_ppp_connect(self, s_id="nozomi", s_pass="wahaha1",
