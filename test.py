@@ -120,25 +120,29 @@ class BGBMaster:
 
     def add_time(self, offset):
         # Offset in seconds
+        old = self.get_time()
         self.timeoffset += int(offset * 2**21)
-        self.update()
+        self.update(old)
 
     def get_time(self):
         return int(self.time + self.timeoffset) & 0x7FFFFFFF
 
-    def forward_time(self):
-        cur = int(time.time() * 2**21)
-        while self.time + 0x1000 < cur:
-            self.time += 0x1000
+    def forward_time(self, old=None):
+        if old is None:
+            old = self.get_time()
+        self.time = int(time.time() * 2**21)
+        cur = self.get_time()
+
+        while old + 0x1000 < cur:
+            old += 0x1000
             pack = {
                 "cmd": BGBMaster.BGB_CMD_SYNC3,
-                "timestamp": self.get_time(),
+                "timestamp": old,
             }
             self.send(pack)
-        self.time = cur
 
-    def update(self):
-        self.forward_time()
+    def update(self, old=None):
+        self.forward_time(old)
         pack = {
             "cmd": BGBMaster.BGB_CMD_SYNC3,
             "timestamp": self.get_time(),
