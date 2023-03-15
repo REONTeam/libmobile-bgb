@@ -32,6 +32,7 @@ executable('mobile',
   'source/bgblink.c',
   'source/main.c',
   'source/socket.c',
+  'source/socket_impl.c',
   c_args : c_args,
   dependencies : deps,
   install : true)

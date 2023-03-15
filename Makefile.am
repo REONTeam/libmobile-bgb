@@ -26,7 +26,9 @@ mobile_SOURCES = \
 	source/bgblink.h \
 	source/main.c \
 	source/socket.c \
-	source/socket.h
+	source/socket.h \
+	source/socket_impl.c \
+	source/socket_impl.h
 
 EXTRA_DIST = \
 	meson.build
