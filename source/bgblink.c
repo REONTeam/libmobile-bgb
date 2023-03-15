@@ -67,7 +67,7 @@ static bool bgb_recv(int socket, struct bgb_packet *buf)
     return num == sizeof(struct bgb_packet);
 }
 
-bool bgb_init(struct bgb_state *state, int socket, bgb_transfer_cb callback_transfer, bgb_timestamp_cb callback_timestamp, void *user)
+bool bgb_init(struct bgb_state *state, int socket, unsigned char init_byte, bgb_transfer_cb callback_transfer, bgb_timestamp_cb callback_timestamp, void *user)
 {
     struct bgb_packet packet;
 
@@ -75,7 +75,7 @@ bool bgb_init(struct bgb_state *state, int socket, bgb_transfer_cb callback_tran
     state->socket = socket;
     state->callback_transfer = callback_transfer;
     state->callback_timestamp = callback_timestamp;
-    state->transfer_last = 0xD2;
+    state->transfer_last = init_byte;
     state->timestamp_last = 0;
     state->timestamp_init = false;
 

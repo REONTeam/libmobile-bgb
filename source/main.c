@@ -850,8 +850,8 @@ int main(int argc, char *argv[])
 
     // Connect to the emulator
     struct bgb_state bgb_state;
-    if (!bgb_init(&bgb_state, bgb_sock, bgb_loop_transfer, bgb_loop_timestamp,
-            mobile)) {
+    if (!bgb_init(&bgb_state, bgb_sock, MOBILE_SERIAL_IDLE_BYTE,
+            bgb_loop_transfer, bgb_loop_timestamp, mobile)) {
         goto error;
     }
 

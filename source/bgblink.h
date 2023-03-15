@@ -21,5 +21,5 @@ struct bgb_state {
 };
 
 void socket_perror(const char *func);
-bool bgb_init(struct bgb_state *state, int socket, bgb_transfer_cb callback_transfer, bgb_timestamp_cb callback_timestamp, void *user);
+bool bgb_init(struct bgb_state *state, int socket, unsigned char init_byte, bgb_transfer_cb callback_transfer, bgb_timestamp_cb callback_timestamp, void *user);
 bool bgb_loop(struct bgb_state *state);
