@@ -1,6 +1,8 @@
 AC_PREREQ([2.71])
 LT_PREREQ([2.4.6])
 AC_INIT([libmobile-bgb], [0.2.0])
+AC_CONFIG_AUX_DIR([build-aux])
+AC_CONFIG_MACRO_DIRS([m4])
 AM_INIT_AUTOMAKE([1.16.5 -Wall foreign subdir-objects])
 AM_SILENT_RULES([yes])
 
@@ -60,7 +62,6 @@ AS_CASE([$host_os], [mingw*], [dnl
     EXTRA_CPPFLAGS="$EXTRA_CPPFLAGS -DUNICODE -D_UNICODE -D_WIN32_WINNT=0x0501"
     AC_CHECK_LIB([ws2_32], [main], [EXTRA_LIBS="$EXTRA_LIBS -lws2_32"])])
 
-AC_CONFIG_MACRO_DIRS([m4])
 AC_CONFIG_HEADERS([autoconf.h])
 AC_CONFIG_FILES([Makefile])
 
