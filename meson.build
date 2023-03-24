@@ -1,5 +1,5 @@
 project('libmobile-bgb', 'c',
-  version : '0.2.1',
+  version : '0.2.2',
   default_options : [
     'warning_level=2',
     'c_std=gnu11'])
@@ -20,7 +20,7 @@ add_global_arguments(global_c_args, language : 'c')
 add_global_link_arguments(global_c_ld_args, language : 'c')
 
 # Link relevant libraries
-deps += dependency('libmobile', version : '>=0.2.0', static : true)
+deps += dependency('libmobile', version : '>=0.2.1', static : true)
 deps += dependency('threads')
 
 if host_machine.system() == 'windows'
