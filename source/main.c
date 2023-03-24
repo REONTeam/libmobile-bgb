@@ -15,6 +15,13 @@
 #include "socket.h"
 #include "socket_impl.h"
 
+#ifdef __WIN32__
+// libwinpthread doesn't support CLOCK_MONOTONIC...
+#define THREAD_CLOCK CLOCK_REALTIME
+#else
+#define THREAD_CLOCK CLOCK_MONOTONIC
+#endif
+
 struct mobile_user {
     pthread_mutex_t mutex_serial;
     pthread_mutex_t mutex_cond;
@@ -200,7 +207,7 @@ static void *thread_mobile_loop(void *user)
     struct timespec now;
     while (!signal_int_trig) {
         // Get current time
-        clock_gettime(CLOCK_MONOTONIC, &now);
+        clock_gettime(THREAD_CLOCK, &now);
 
         if (mobile->action == MOBILE_ACTION_NONE) {
             struct timespec to = now;
@@ -238,7 +245,7 @@ static void *thread_mobile_loop(void *user)
                 to.tv_nsec -= 1000000000;
                 to.tv_sec += 1;
             }
-            clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &to, NULL);
+            clock_nanosleep(THREAD_CLOCK, TIMER_ABSTIME, &to, NULL);
 
             // Fetch next action
             mobile->action =
@@ -542,7 +549,7 @@ int main(int argc, char *argv[])
     pthread_condattr_t cond_attr;
     pt_err = pthread_condattr_init(&cond_attr);
     assert(!pt_err);
-    pt_err = pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC);
+    pt_err = pthread_condattr_setclock(&cond_attr, THREAD_CLOCK);
     assert(!pt_err);
     pt_err = pthread_cond_init(&mobile->cond, &cond_attr);
     assert(!pt_err);
