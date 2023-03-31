@@ -75,7 +75,7 @@ bool bgb_init(struct bgb_state *state, int socket, unsigned char init_byte, bgb_
     state->socket = socket;
     state->callback_transfer = callback_transfer;
     state->callback_timestamp = callback_timestamp;
-    state->transfer_last = init_byte;
+    state->byte = init_byte;
     state->timestamp_last = 0;
     state->timestamp_init = false;
 
@@ -117,7 +117,7 @@ bool bgb_init(struct bgb_state *state, int socket, unsigned char init_byte, bgb_
 bool bgb_loop(struct bgb_state *state)
 {
     struct bgb_packet packet;
-    unsigned char transfer_cur;
+    unsigned char byte_cur;
     uint32_t timestamp_cur = state->timestamp_last;
 
     if (!bgb_recv(state->socket, &packet)) return false;
@@ -128,17 +128,16 @@ bool bgb_loop(struct bgb_state *state)
         break;
 
     case BGB_CMD_SYNC1:
-        transfer_cur = packet.b2;
+        byte_cur = packet.b2;
         timestamp_cur = packet.timestamp;
         packet.cmd = BGB_CMD_SYNC2;
-        packet.b2 = state->transfer_last;
+        packet.b2 = state->byte;
         packet.b3 = 0x80;
         packet.b4 = 0;
         packet.timestamp = 0;
         if (!bgb_send(state->socket, &packet)) return false;
         if (state->callback_transfer) {
-            state->transfer_last =
-                state->callback_transfer(state->user, transfer_cur);
+            state->byte = state->callback_transfer(state->user, byte_cur);
         }
         break;
 

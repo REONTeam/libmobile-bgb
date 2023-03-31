@@ -11,11 +11,11 @@ struct bgb_state {
     // public
     void *user;
     int socket;
+    unsigned char byte;
     bgb_transfer_cb callback_transfer;
     bgb_timestamp_cb callback_timestamp;
 
     // private
-    unsigned char transfer_last;
     uint32_t timestamp_last;
     bool timestamp_init;
 };
