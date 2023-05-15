@@ -2,7 +2,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS =
 
-AM_CPPFLAGS = -DNDEBUG $(EXTRA_CPPFLAGS)
+AM_CPPFLAGS = $(EXTRA_CPPFLAGS)
 AM_CFLAGS = $(EXTRA_CFLAGS)
 
 mobile_CPPFLAGS = $(AM_CPPFLAGS)
@@ -15,7 +15,7 @@ mobile_CFLAGS += $(LIBMOBILE_CFLAGS)
 mobile_LDADD += $(LIBMOBILE_LIBS)
 else
 SUBDIRS += subprojects/libmobile
-mobile_CPPFLAGS += -I $(srcdir)/subprojects/libmobile
+mobile_CPPFLAGS += -I subprojects/libmobile -I $(srcdir)/subprojects/libmobile
 mobile_LDADD += subprojects/libmobile/libmobile.la
 endif
 
@@ -31,4 +31,5 @@ mobile_SOURCES = \
 	source/socket_impl.h
 
 EXTRA_DIST = \
-	meson.build
+	meson.build \
+	CMakeLists.txt

@@ -5,19 +5,14 @@ project('libmobile-bgb', 'c',
     'c_std=gnu11'])
 
 cc = meson.get_compiler('c')
-global_c_args = []
-global_c_ld_args = []
 c_args = []
 deps = []
 
 # Enable -ffunction-sections -fdata-sections and -Wl,--gc-sections by default
 if cc.has_link_argument('-Wl,--gc-sections')
-  global_c_args += ['-ffunction-sections', '-fdata-sections']
-  global_c_ld_args += '-Wl,--gc-sections'
+  add_global_arguments(['-ffunction-sections', '-fdata-sections'], language : 'c')
+  add_global_link_arguments('-Wl,--gc-sections', language : 'c')
 endif
-
-add_global_arguments(global_c_args, language : 'c')
-add_global_link_arguments(global_c_ld_args, language : 'c')
 
 # Link relevant libraries
 deps += dependency('libmobile', version : '>=0.2.0', static : true)

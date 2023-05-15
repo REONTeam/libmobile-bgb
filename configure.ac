@@ -38,16 +38,16 @@ export CFLAGS LDFLAGS
 
 # Include libmobile library
 AC_ARG_WITH([system-libmobile], AS_HELP_STRING([--with-system-libmobile],
-    [use a shared copy of libmobile rather than the bundled one]))
+    [use a system-wide copy of libmobile]))
+found_libmobile=no
 AS_IF([test "$with_system_libmobile" != no], [dnl
     PKG_CHECK_MODULES_STATIC([LIBMOBILE], [libmobile >= 0.2.0],
-        [with_system_libmobile=yes],
-        [with_system_libmobile=no]
-        AS_IF([test "$with_system_libmobile" = yes],
-            AC_MSG_FAILURE([libmobile not found])))])
-AS_IF([test "$with_system_libmobile" = no], [dnl
+        [found_libmobile=yes], [:])])
+AS_IF([test "$with_system_libmobile" = yes -a "$found_libmobile" != yes], [dnl
+    AC_MSG_FAILURE([libmobile not found])])
+AS_IF([test "$found_libmobile" = no], [dnl
     AC_CONFIG_SUBDIRS([subprojects/libmobile])])
-AM_CONDITIONAL([WITH_SYSTEM_LIBMOBILE], [test "$with_system_libmobile" = yes])
+AM_CONDITIONAL([WITH_SYSTEM_LIBMOBILE], [test "$found_libmobile" = yes])
 
 # Default cflags
 AS_IF([test "$GCC" = yes], [dnl
@@ -60,7 +60,8 @@ MY_CHECK_FLAG([CFLAGS], [-pthread], [dnl
 # Link windows libraries
 AS_CASE([$host_os], [mingw*], [dnl
     EXTRA_CPPFLAGS="$EXTRA_CPPFLAGS -DUNICODE -D_UNICODE -D_WIN32_WINNT=0x0501"
-    AC_CHECK_LIB([ws2_32], [main], [EXTRA_LIBS="$EXTRA_LIBS -lws2_32"])])
+    AC_CHECK_LIB([ws2_32], [socket], [EXTRA_LIBS="$EXTRA_LIBS -lws2_32"],
+        [AC_MSG_FAILURE([ws2_32 not found])])])
 
 AC_CONFIG_HEADERS([autoconf.h])
 AC_CONFIG_FILES([Makefile])
