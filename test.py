@@ -814,7 +814,7 @@ class Tests(unittest.TestCase):
 
         # Connection closed
         with self.assertRaises(MobileCmdError) as e:
-            m.cmd_data(0xFF)
+            m.cmd_data(0xFF, b"\0")
         self.assertEqual(e.exception.code, 0)
 
         m.cmd_offline()
@@ -842,7 +842,7 @@ class Tests(unittest.TestCase):
 
         # Connection closed
         with self.assertRaises(MobileCmdError) as e:
-            m.cmd_data(0xFF)
+            m.cmd_data(0xFF, b"\0")
         self.assertEqual(e.exception.code, 0)
 
         m.cmd_offline()
