@@ -28,6 +28,10 @@ AS_VAR_IF(CHECK, [yes], [m4_default([$3])], [m4_default([$4])])
 AS_VAR_POPDEF([CHECK])dnl
 ])dnl
 
+# Default cflags
+AS_IF([test "$GCC" = yes], [dnl
+    EXTRA_CFLAGS="$EXTRA_CFLAGS -std=gnu11 -Wall -Wextra"])
+
 # Enable -ffunction-sections -fdata-sections and -Wl,--gc-sections by default
 MY_CHECK_FLAG([LDFLAGS], [-Wl,--gc-sections], [dnl
     CFLAGS="-ffunction-sections -fdata-sections $CFLAGS"
@@ -48,10 +52,6 @@ AS_IF([test "$with_system_libmobile" = yes -a "$found_libmobile" != yes], [dnl
 AS_IF([test "$found_libmobile" = no], [dnl
     AC_CONFIG_SUBDIRS([subprojects/libmobile])])
 AM_CONDITIONAL([WITH_SYSTEM_LIBMOBILE], [test "$found_libmobile" = yes])
-
-# Default cflags
-AS_IF([test "$GCC" = yes], [dnl
-    EXTRA_CFLAGS="$EXTRA_CFLAGS -std=gnu11 -Wall -Wextra"])
 
 # Add threading support
 MY_CHECK_FLAG([CFLAGS], [-pthread], [dnl

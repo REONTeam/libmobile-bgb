@@ -8,8 +8,14 @@ set(CMAKE_C_STANDARD 11)
 option(WITH_SYSTEM_LIBMOBILE "force using a system-wide copy of libmobile" OFF)
 option(WITH_BUNDLED_LIBMOBILE "force using a bundled copy of libmobile" OFF)
 
+set(c_args)
 set(c_defs)
 set(deps)
+
+# Default cflags
+if(NOT MSVC)
+    list(APPEND c_args -Wall -Wextra)
+endif()
 
 # Enable -ffunction-sections -fdata-sections and -Wl,--gc-sections by default
 check_linker_flag(C -Wl,--gc-sections HAVE_GC_SECTIONS)
@@ -53,5 +59,6 @@ add_executable(mobile
     source/socket.c
     source/socket_impl.c)
 target_link_libraries(mobile PRIVATE ${deps})
+target_compile_options(mobile PRIVATE ${c_args})
 target_compile_definitions(mobile PRIVATE ${c_defs})
 install(TARGETS mobile)
