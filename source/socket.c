@@ -130,7 +130,7 @@ int socket_wait(SOCKET *sockets, unsigned count, int delay)
         for (unsigned i = 0; i < count; i++) {
             fds[i] = (struct pollfd){.fd = sockets[i], .events = POLLIN};
         }
-        int rc = poll(fds, count, delay)
+        int rc = poll(fds, count, delay);
         if (rc == -1) perror("poll");
         return rc;
 #else
