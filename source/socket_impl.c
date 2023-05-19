@@ -76,7 +76,7 @@ bool socket_impl_open(struct socket_impl *state, unsigned conn, enum mobile_sock
         default: assert(false); return false;
     }
 
-    int sock = socket(sock_addrtype, sock_type, 0);
+    SOCKET sock = socket(sock_addrtype, sock_type, 0);
     if (sock == -1) {
         socket_perror("socket");
         return false;
@@ -136,7 +136,7 @@ void socket_impl_close(struct socket_impl *state, unsigned conn)
 
 int socket_impl_connect(struct socket_impl *state, unsigned conn, const struct mobile_addr *addr)
 {
-    int sock = state->sockets[conn];
+    SOCKET sock = state->sockets[conn];
     assert(sock != -1);
 
     union u_sockaddr u_addr;
@@ -151,7 +151,7 @@ int socket_impl_connect(struct socket_impl *state, unsigned conn, const struct m
     //   enough for it to connect.
     if (err == SOCKET_EWOULDBLOCK || err == SOCKET_EINPROGRESS
             || err == SOCKET_EALREADY) {
-        int rc = socket_isconnected(sock, 100);
+        int rc = socket_isconnected(sock);
         if (rc > 0) return 1;
         if (rc == 0) return 0;
         err = socket_geterror();
@@ -170,7 +170,7 @@ int socket_impl_connect(struct socket_impl *state, unsigned conn, const struct m
 
 bool socket_impl_listen(struct socket_impl *state, unsigned conn)
 {
-    int sock = state->sockets[conn];
+    SOCKET sock = state->sockets[conn];
     assert(sock != -1);
 
     if (listen(sock, 1) == -1) {
@@ -183,11 +183,11 @@ bool socket_impl_listen(struct socket_impl *state, unsigned conn)
 
 bool socket_impl_accept(struct socket_impl *state, unsigned conn)
 {
-    int sock = state->sockets[conn];
+    SOCKET sock = state->sockets[conn];
     assert(sock != -1);
 
-    if (socket_hasdata(sock, 0) <= 0) return false;
-    int newsock = accept(sock, NULL, NULL);
+    if (socket_hasdata(sock) <= 0) return false;
+    SOCKET newsock = accept(sock, NULL, NULL);
     if (newsock == -1) {
         socket_perror("accept");
         return false;
@@ -201,7 +201,7 @@ bool socket_impl_accept(struct socket_impl *state, unsigned conn)
 
 int socket_impl_send(struct socket_impl *state, unsigned conn, const void *data, const unsigned size, const struct mobile_addr *addr)
 {
-    int sock = state->sockets[conn];
+    SOCKET sock = state->sockets[conn];
     assert(sock != -1);
 
     union u_sockaddr u_addr;
@@ -222,11 +222,11 @@ int socket_impl_send(struct socket_impl *state, unsigned conn, const void *data,
 
 int socket_impl_recv(struct socket_impl *state, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
 {
-    int sock = state->sockets[conn];
+    SOCKET sock = state->sockets[conn];
     assert(sock != -1);
 
     // Make sure at least one byte is in the buffer
-    if (socket_hasdata(sock, 0) <= 0) return 0;
+    if (socket_hasdata(sock) <= 0) return 0;
 
     union u_sockaddr u_addr = {0};
     socklen_t sock_addrlen = sizeof(u_addr);

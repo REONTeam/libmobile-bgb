@@ -16,18 +16,21 @@ endif
 
 # Link relevant libraries
 deps += dependency('libmobile', version : '>=0.2.0', static : true)
-deps += dependency('threads')
 
 if host_machine.system() == 'windows'
   deps += cc.find_library('ws2_32')
   c_args += ['-DUNICODE', '-D_UNICODE', '-D_WIN32_WINNT=0x0501']
+  c_args += ['-D_CRT_SECURE_NO_WARNINGS']
 endif
 
 executable('mobile',
   'source/bgblink.c',
+  'source/bgblink.h',
   'source/main.c',
   'source/socket.c',
+  'source/socket.h',
   'source/socket_impl.c',
+  'source/socket_impl.h',
   c_args : c_args,
   dependencies : deps,
   install : true)

@@ -53,14 +53,11 @@ AS_IF([test "$found_libmobile" = no], [dnl
     AC_CONFIG_SUBDIRS([subprojects/libmobile])])
 AM_CONDITIONAL([WITH_SYSTEM_LIBMOBILE], [test "$found_libmobile" = yes])
 
-# Add threading support
-MY_CHECK_FLAG([CFLAGS], [-pthread], [dnl
-    EXTRA_CFLAGS="$EXTRA_CFLAGS -pthread"])
-
 # Link windows libraries
 AS_CASE([$host_os], [mingw*], [dnl
     EXTRA_CPPFLAGS="$EXTRA_CPPFLAGS -DUNICODE -D_UNICODE -D_WIN32_WINNT=0x0501"
-    AC_CHECK_LIB([ws2_32], [socket], [EXTRA_LIBS="$EXTRA_LIBS -lws2_32"],
+    EXTRA_CPPFLAGS="$EXTRA_CPPFLAGS -D_CRT_SECURE_NO_WARNINGS"
+    AC_CHECK_LIB([ws2_32], [exit], [EXTRA_LIBS="$EXTRA_LIBS -lws2_32"],
         [AC_MSG_FAILURE([ws2_32 not found])])])
 
 AC_CONFIG_HEADERS([autoconf.h])

@@ -23,7 +23,7 @@ void socket_perror(const char *func)
         return;
     }
     fprintf(stderr, "%s\n", error);
-#elif defined(__WIN32__)
+#elif defined(_WIN32)
     LPWSTR error = NULL;
     if (!FormatMessageW(
             FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
@@ -56,7 +56,7 @@ int socket_straddr(char *res, unsigned res_len, char *res_port, struct sockaddr 
 #if defined(__unix__)
     (void)addrlen;
     if (!inet_ntop(addr->sa_family, inaddr, res, res_len)) return -1;
-#elif defined(__WIN32__)
+#elif defined(_WIN32)
     (void)inaddr;
     DWORD res_len_r = res_len;
     if (WSAAddressToStringA(addr, addrlen, NULL, res, &res_len_r)
@@ -69,51 +69,51 @@ int socket_straddr(char *res, unsigned res_len, char *res_port, struct sockaddr 
 }
 
 // Check if a socket has data in the receive buffer (or an error)
-int socket_hasdata(int socket, int delay)
+int socket_hasdata(SOCKET socket)
 {
-#if defined(__unix__)
+#ifdef SOCKET_USE_POLL
     struct pollfd fd = {
         .fd = socket,
         .events = POLLIN | POLLPRI,
     };
-    int rc = poll(&fd, 1, delay);
+    int rc = poll(&fd, 1, 0);
     if (rc == -1) perror("poll");
     return rc;
-#elif defined(__WIN32__)
-    fd_set rfds;
+#else
+    fd_set rfds, exfds;
     FD_ZERO(&rfds);
-    FD_SET(socket, &rfds);
-    fd_set exfds;
     FD_ZERO(&exfds);
+    FD_SET(socket, &rfds);
     FD_SET(socket, &exfds);
-    struct timeval tv = {.tv_sec = delay / 1000, .tv_usec = (delay % 1000) * 1000};
-    int rc = select(socket + 1, &rfds, NULL, &exfds, &tv);
+    struct timeval tv = {0};
+    int rc = select((int)socket + 1, &rfds, NULL, &exfds, &tv);
     if (rc == -1) perror("select");
     return rc;
 #endif
 }
 
 // Check if a connect() call has completed
-int socket_isconnected(int socket, int delay)
+int socket_isconnected(SOCKET socket)
 {
-#if defined(__unix__)
+#ifdef SOCKET_USE_POLL
     struct pollfd fd = {
         .fd = socket,
         .events = POLLOUT,
     };
-    int rc = poll(&fd, 1, delay);
+    int rc = poll(&fd, 1, 0);
     if (rc == -1) perror("poll");
     if (rc <= 0) return rc;
-#elif defined(__WIN32__)
+#else
     fd_set wfds;
     FD_ZERO(&wfds);
     FD_SET(socket, &wfds);
-    struct timeval tv = {.tv_sec = delay / 1000, .tv_usec = (delay % 1000) * 1000};
-    int rc = select(socket + 1, NULL, &wfds, NULL, &tv);
+    struct timeval tv = {0};
+    int rc = select((int)socket + 1, NULL, &wfds, NULL, &tv);
     if (rc == -1) perror("select");
     if (rc <= 0) return rc;
 #endif
 
+    // Get the error number that actually occurred
     int err;
     socklen_t err_len = sizeof(err);
     getsockopt(socket, SOL_SOCKET, SO_ERROR, (char *)&err, &err_len);
@@ -122,8 +122,38 @@ int socket_isconnected(int socket, int delay)
     return 1;
 }
 
+// Wait on one or more sockets to become readable
+int socket_wait(SOCKET *sockets, unsigned count, int delay)
+{
+#ifdef SOCKET_USE_POLL
+        struct pollfd fds[count];
+        for (unsigned i = 0; i < count; i++) {
+            fds[i] = (struct pollfd){.fd = sockets[i], .events = POLLIN};
+        }
+        int rc = poll(fds, count, delay)
+        if (rc == -1) perror("poll");
+        return rc;
+#else
+        SOCKET maxfd = 0;
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        for (unsigned i = 0; i < count; i++) {
+            maxfd = max(sockets[i], maxfd);
+            FD_SET(sockets[i], &rfds);
+        }
+
+        struct timeval tv = {
+            .tv_sec = delay / 1000,
+            .tv_usec = (delay % 1000) * 1000
+        };
+        int rc = select((int)maxfd + 1, &rfds, NULL, NULL, &tv);
+        if (rc == -1) perror("select");
+        return rc;
+#endif
+}
+
 // Set whether connect() and recv() calls on a socket block
-int socket_setblocking(int socket, int flag)
+int socket_setblocking(SOCKET socket, int flag)
 {
 #if defined(__unix__)
     int flags = fcntl(socket, F_GETFL);
@@ -137,7 +167,7 @@ int socket_setblocking(int socket, int flag)
         perror("fcntl");
         return -1;
     }
-#elif defined(__WIN32__)
+#elif defined(_WIN32)
     u_long mode = !flag;
     if (ioctlsocket(socket, FIONBIO, &mode) != NO_ERROR) return -1;
 #endif
@@ -145,7 +175,7 @@ int socket_setblocking(int socket, int flag)
 }
 
 // Connect a socket to a user-provided hostname and port
-int socket_connect(const char *host, const char *port)
+SOCKET socket_connect(const char *host, const char *port)
 {
     struct addrinfo hints = {
         .ai_family = AF_UNSPEC,
@@ -157,14 +187,14 @@ int socket_connect(const char *host, const char *port)
     if (gai_errno) {
 #if defined(__unix__)
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai_errno));
-#elif defined(__WIN32__)
+#elif defined(_WIN32)
         fprintf(stderr, "getaddrinfo: Error %d: ", gai_errno);
         socket_perror(NULL);
 #endif
         return -1;
     }
 
-    int sock = -1;
+    SOCKET sock = -1;
     int error = 0;
     struct addrinfo* info;
     for (info = result; info; info = info->ai_next) {
@@ -174,7 +204,7 @@ int socket_connect(const char *host, const char *port)
             socket_perror("socket");
             continue;
         }
-        if (connect(sock, info->ai_addr, info->ai_addrlen) == 0) break;
+        if (connect(sock, info->ai_addr, (int)info->ai_addrlen) == 0) break;
         error = socket_geterror();
         socket_close(sock);
     }

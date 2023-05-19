@@ -40,24 +40,24 @@ else()
     list(APPEND deps libmobile_static)
 endif()
 
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
-list(APPEND deps Threads::Threads)
-
 if(WIN32)
-    check_library_exists(ws2_32 socket "" HAVE_LIBWS2_32)
+    check_library_exists(ws2_32 exit "" HAVE_LIBWS2_32)
     if(NOT HAVE_LIBWS2_32)
         message(FATAL_ERROR "ws2_32 not found")
     endif()
     list(APPEND deps ws2_32)
     list(APPEND c_defs UNICODE _UNICODE _WIN32_WINNT=0x0501)
+    list(APPEND c_defs _CRT_SECURE_NO_WARNINGS)
 endif()
 
 add_executable(mobile
     source/bgblink.c
+    source/bgblink.h
     source/main.c
     source/socket.c
-    source/socket_impl.c)
+    source/socket.h
+    source/socket_impl.c
+    source/socket_impl.h)
 target_link_libraries(mobile PRIVATE ${deps})
 target_compile_options(mobile PRIVATE ${c_args})
 target_compile_definitions(mobile PRIVATE ${c_defs})

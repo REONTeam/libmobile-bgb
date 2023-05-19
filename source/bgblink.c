@@ -12,7 +12,7 @@
 #if defined(__GNUC__)
 #define A_PACKED(...) __VA_ARGS__ __attribute__((packed))
 #elif defined(_MSC_VER)
-#define A_PACKED(...) _Pragma(pack(push, 1)) __VA_ARGS__ _Pragma(pack(pop))
+#define A_PACKED(...) __pragma(pack(push, 1)) __VA_ARGS__ __pragma(pack(pop))
 #else
 #define A_PACKED(...) __VA_ARGS__
 #endif
@@ -47,7 +47,7 @@ static const struct bgb_packet handshake = {
     .timestamp = 0,
 };
 
-static bool bgb_send(int socket, struct bgb_packet *buf)
+static bool bgb_send(SOCKET socket, struct bgb_packet *buf)
 {
     ssize_t num = send(socket, (char *)buf, sizeof(struct bgb_packet), 0);
     if (num == -1) {
@@ -57,7 +57,7 @@ static bool bgb_send(int socket, struct bgb_packet *buf)
     return num == sizeof(struct bgb_packet);
 }
 
-static bool bgb_recv(int socket, struct bgb_packet *buf)
+static bool bgb_recv(SOCKET socket, struct bgb_packet *buf)
 {
     ssize_t num = recv(socket, (char *)buf, sizeof(struct bgb_packet), 0);
     if (num == -1) {
@@ -67,7 +67,7 @@ static bool bgb_recv(int socket, struct bgb_packet *buf)
     return num == sizeof(struct bgb_packet);
 }
 
-bool bgb_init(struct bgb_state *state, int socket, unsigned char init_byte, bgb_transfer_cb callback_transfer, bgb_timestamp_cb callback_timestamp, void *user)
+bool bgb_init(struct bgb_state *state, SOCKET socket, unsigned char init_byte, bgb_transfer_cb callback_transfer, bgb_timestamp_cb callback_timestamp, void *user)
 {
     struct bgb_packet packet;
 
@@ -120,6 +120,7 @@ bool bgb_loop(struct bgb_state *state)
     unsigned char byte_cur;
     uint32_t timestamp_cur = state->timestamp_last;
 
+    if (socket_hasdata(state->socket) <= 0) return true;
     if (!bgb_recv(state->socket, &packet)) return false;
 
     switch (packet.cmd) {

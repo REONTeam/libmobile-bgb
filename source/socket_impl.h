@@ -3,8 +3,10 @@
 
 #include <mobile.h>
 
+#include "socket.h"
+
 struct socket_impl {
-    int sockets[MOBILE_MAX_CONNECTIONS];
+    SOCKET sockets[MOBILE_MAX_CONNECTIONS];
 };
 
 void socket_impl_init(struct socket_impl *state);

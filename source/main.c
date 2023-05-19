@@ -4,7 +4,6 @@
 #include <string.h>
 #include <assert.h>
 #include <locale.h>
-#include <pthread.h>
 #include <signal.h>
 #include <wchar.h>
 
@@ -15,23 +14,13 @@
 #include "socket.h"
 #include "socket_impl.h"
 
-#ifdef __WIN32__
-// libwinpthread doesn't support CLOCK_MONOTONIC...
-#define THREAD_CLOCK CLOCK_REALTIME
-#else
-#define THREAD_CLOCK CLOCK_MONOTONIC
-#endif
-
 struct mobile_user {
-    pthread_mutex_t mutex_serial;
-    pthread_mutex_t mutex_cond;
-    pthread_cond_t cond;
     struct mobile_adapter *adapter;
     struct socket_impl socket;
     enum mobile_action action;
     FILE *config;
-    _Atomic volatile bool reset;
-    _Atomic volatile uint32_t bgb_clock;
+    volatile bool reset;
+    volatile uint32_t bgb_clock;
     bool bgb_clock_init;
     uint32_t bgb_clock_latch[MOBILE_MAX_TIMERS];
     char number_user[MOBILE_MAX_NUMBER_SIZE + 1];
@@ -42,19 +31,6 @@ static void impl_debug_log(void *user, const char *line)
 {
     (void)user;
     fprintf(stderr, "%s\n", line);
-}
-
-static void impl_serial_disable(void *user)
-{
-    struct mobile_user *mobile = (struct mobile_user *)user;
-    pthread_mutex_lock(&mobile->mutex_serial);
-}
-
-static void impl_serial_enable(void *user, bool mode_32bit)
-{
-    (void)mode_32bit;
-    struct mobile_user *mobile = (struct mobile_user *)user;
-    pthread_mutex_unlock(&mobile->mutex_serial);
 }
 
 static bool impl_config_read(void *user, void *dest, const uintptr_t offset, const size_t size)
@@ -94,7 +70,7 @@ static bool impl_sock_open(void *user, unsigned conn, enum mobile_socktype type,
 static void impl_sock_close(void *user, unsigned conn)
 {
     struct mobile_user *mobile = (struct mobile_user *)user;
-    return socket_impl_close(&mobile->socket, conn);
+    socket_impl_close(&mobile->socket, conn);
 }
 
 static int impl_sock_connect(void *user, unsigned conn, const struct mobile_addr *addr)
@@ -137,7 +113,7 @@ static void update_title(struct mobile_user *mobile)
 
     if (mobile->number_peer[0]) {
         i += swprintf(title + i, (sizeof(title) / sizeof(*title)) - i,
-            L"Call: %s", mobile->number_peer);
+            L"Call: %hs", mobile->number_peer);
     } else {
         i += swprintf(title + i, (sizeof(title) / sizeof(*title)) - i,
             L"Disconnected");
@@ -145,13 +121,13 @@ static void update_title(struct mobile_user *mobile)
 
     if (mobile->number_user[0]) {
         i += swprintf(title + i, (sizeof(title) / sizeof(*title)) - i,
-            L" (Your number: %s)", mobile->number_user);
+            L" (Your number: %hs)", mobile->number_user);
     }
 
 #if defined(__unix__)
     printf("\e]0;%ls\a", title);
     fflush(stdout);
-#elif defined(__WIN32__)
+#elif defined(_WIN32)
     SetConsoleTitleW(title);
 #endif
 }
@@ -183,7 +159,7 @@ static void signal_int(int signo)
     (void)signo;
     signal_int_trig = true;
 }
-#ifdef __WIN32__
+#ifdef _WIN32
 static BOOL WINAPI CtrlHandler(DWORD fdwCtrlType)
 {
     if (fdwCtrlType == CTRL_C_EVENT ||
@@ -201,92 +177,37 @@ static enum mobile_action filter_actions(enum mobile_action actions)
     return actions & ~MOBILE_ACTION_RESET_SERIAL;
 }
 
-static void *thread_mobile_loop(void *user)
+static bool mobile_handle_loop(struct mobile_user *mobile)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
-    struct timespec now;
-    while (!signal_int_trig) {
-        // Get current time
-        clock_gettime(THREAD_CLOCK, &now);
+	// Reset the adapter if requested
+	if (mobile->reset) {
+		mobile_stop(mobile->adapter);
+		mobile_start(mobile->adapter);
+		mobile->reset = false;
+	}
 
-        if (mobile->action == MOBILE_ACTION_NONE) {
-            struct timespec to = now;
-            to.tv_nsec += 100000000;  // 100ms
-            if (to.tv_nsec > 1000000000) {
-                to.tv_nsec -= 1000000000;
-                to.tv_sec += 1;
-            }
+	// Fetch action if none exists
+	if (mobile->action == MOBILE_ACTION_NONE) {
+		mobile->action =
+			filter_actions(mobile_actions_get(mobile->adapter));
+	}
 
-            // Implicitly unlocks mutex_cond while waiting
-            pthread_cond_timedwait(&mobile->cond, &mobile->mutex_cond, &to);
-        }
+	// Process action
+	if (mobile->action != MOBILE_ACTION_NONE) {
+		mobile_actions_process(mobile->adapter, mobile->action);
 
-        // Reset the adapter if requested
-        if (mobile->reset) {
-            mobile_stop(mobile->adapter);
-            mobile_start(mobile->adapter);
-            mobile->reset = false;
-        }
-
-        // Fetch action if none exists
-        if (mobile->action == MOBILE_ACTION_NONE) {
-            mobile->action =
-                filter_actions(mobile_actions_get(mobile->adapter));
-        }
-
-        // Process action
-        if (mobile->action != MOBILE_ACTION_NONE) {
-            mobile_actions_process(mobile->adapter, mobile->action);
-
-            // Sleep 10ms to avoid busylooping too hard
-            struct timespec to = now;
-            to.tv_nsec += 10000000;  // 10ms
-            if (to.tv_nsec > 1000000000) {
-                to.tv_nsec -= 1000000000;
-                to.tv_sec += 1;
-            }
-            clock_nanosleep(THREAD_CLOCK, TIMER_ABSTIME, &to, NULL);
-
-            // Fetch next action
-            mobile->action =
-                filter_actions(mobile_actions_get(mobile->adapter));
-        }
-    }
-    return NULL;
-}
-
-static void bgb_loop_action(struct mobile_user *mobile)
-{
-    // Called for every byte transfer, unlock thread_mobile_loop if there's
-    //   anything to be done.
-
-    // If the thread isn't doing anything, queue up the next action.
-    if (pthread_mutex_trylock(&mobile->mutex_cond) != 0) return;
-
-    // If a reset was triggered, simply wake up the thread
-    if (mobile->reset) {
-        pthread_cond_broadcast(&mobile->cond);
-        pthread_mutex_unlock(&mobile->mutex_cond);
-        return;
-    }
-
-    if (mobile->action == MOBILE_ACTION_NONE) {
-        mobile->action = filter_actions(mobile_actions_get(mobile->adapter));
-    }
-    if (mobile->action != MOBILE_ACTION_NONE) {
-        pthread_cond_broadcast(&mobile->cond);
-    }
-    pthread_mutex_unlock(&mobile->mutex_cond);
+		// Fetch next action
+		mobile->action =
+			filter_actions(mobile_actions_get(mobile->adapter));
+	}
+    return true;
 }
 
 static unsigned char bgb_loop_transfer(void *user, unsigned char c)
 {
     // Transfer a byte over the serial port
     struct mobile_user *mobile = (struct mobile_user *)user;
-    pthread_mutex_lock(&mobile->mutex_serial);
     c = mobile_transfer(mobile->adapter, c);
-    pthread_mutex_unlock(&mobile->mutex_serial);
-    bgb_loop_action(mobile);
     return c;
 }
 
@@ -304,7 +225,6 @@ static void bgb_loop_timestamp(void *user, uint32_t t)
     }
 
     mobile->bgb_clock = t;
-    bgb_loop_action(mobile);
 }
 
 static void bgb_loop_timestamp_init(void *user, uint32_t t)
@@ -532,8 +452,6 @@ int main(int argc, char *argv[])
         perror("malloc");
         goto error;
     }
-    mobile->mutex_serial = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-    mobile->mutex_cond = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     mobile->action = MOBILE_ACTION_NONE;
     mobile->config = config;
     mobile->reset = false;
@@ -544,24 +462,9 @@ int main(int argc, char *argv[])
     mobile->number_peer[0] = '\0';
     socket_impl_init(&mobile->socket);
 
-    // Initialize condition with attributes
-    int pt_err; (void)pt_err;
-    pthread_condattr_t cond_attr;
-    pt_err = pthread_condattr_init(&cond_attr);
-    assert(!pt_err);
-    pt_err = pthread_condattr_setclock(&cond_attr, THREAD_CLOCK);
-    assert(!pt_err);
-    pt_err = pthread_cond_init(&mobile->cond, &cond_attr);
-    assert(!pt_err);
-
-    pthread_mutex_lock(&mobile->mutex_cond);
-    pthread_mutex_lock(&mobile->mutex_serial);
-
     // Initialize mobile library
     mobile->adapter = mobile_new(mobile);
     mobile_def_debug_log(mobile->adapter, impl_debug_log);
-    mobile_def_serial_disable(mobile->adapter, impl_serial_disable);
-    mobile_def_serial_enable(mobile->adapter, impl_serial_enable);
     mobile_def_config_read(mobile->adapter, impl_config_read);
     mobile_def_config_write(mobile->adapter, impl_config_write);
     mobile_def_time_latch(mobile->adapter, impl_time_latch);
@@ -586,7 +489,7 @@ int main(int argc, char *argv[])
     mobile_config_save(mobile->adapter);
 
     // Initialize windows sockets
-#ifdef __WIN32__
+#ifdef _WIN32
     WSADATA wsaData;
     int wsa_err = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (wsa_err != NO_ERROR) {
@@ -596,7 +499,7 @@ int main(int argc, char *argv[])
 #endif
 
     // Connect to the emulator
-    int bgb_sock = socket_connect(host, port);
+    SOCKET bgb_sock = socket_connect(host, port);
     if (bgb_sock == -1) {
         fprintf(stderr, "Could not connect (%s:%s): ", host, port);
         socket_perror(NULL);
@@ -615,7 +518,7 @@ int main(int argc, char *argv[])
         perror("sigaction");
         goto error;
     }
-#elif defined(__WIN32__)
+#elif defined(_WIN32)
     if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
         fprintf(stderr, "SetConsoleCtrlHandler failed\n");
         goto error;
@@ -637,27 +540,33 @@ int main(int argc, char *argv[])
 
     // Start main mobile thread
     mobile_start(mobile->adapter);
-    pthread_t mobile_thread;
-    int pthread_err = pthread_create(&mobile_thread, NULL, thread_mobile_loop,
-        mobile);
-    if (pthread_err) {
-        fprintf(stderr, "pthread_create: %s\n", strerror(pthread_err));
-        goto error;
-    }
 
-    while (!signal_int_trig) if (!bgb_loop(&bgb_state)) break;
+    while (!signal_int_trig) {
+        if (!bgb_loop(&bgb_state)) break;
+        if (!mobile_handle_loop(mobile)) break;
+
+        // Wait for any of the sockets to do something
+        // Time out after 100ms
+        SOCKET sockets[1 + MOBILE_MAX_CONNECTIONS];
+        unsigned socket_count = 0;
+        sockets[socket_count++] = bgb_sock;
+        for (unsigned i = 0; i < MOBILE_MAX_CONNECTIONS; i++) {
+            SOCKET fd = mobile->socket.sockets[i];
+            if (fd == -1) continue;
+            sockets[socket_count++] = fd;
+        }
+        socket_wait(sockets, socket_count, 100);
+    }
     signal_int_trig = true;
 
-    // Wait for the mobile thread to finish
-    pthread_cond_broadcast(&mobile->cond);
-    pthread_join(mobile_thread, NULL);
+   // Wait for the mobile thread to finish
     mobile_stop(mobile->adapter);
 
     // Close all sockets
     socket_impl_stop(&mobile->socket);
     socket_close(bgb_sock);
 
-#ifdef __WIN32__
+#ifdef _WIN32
     WSACleanup();
 #endif
     free(mobile->adapter);
