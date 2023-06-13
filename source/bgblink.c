@@ -159,7 +159,7 @@ bool bgb_loop(struct bgb_state *state)
 
     default:
         fprintf(stderr, "bgb_loop: Unknown command: %d (%02X %02X %02X) @ %d\n",
-                packet.cmd, packet.b2, packet.b3, packet.b4, packet.timestamp);
+            packet.cmd, packet.b2, packet.b3, packet.b4, packet.timestamp);
         return false;
     }
 

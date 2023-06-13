@@ -126,29 +126,29 @@ int socket_isconnected(SOCKET socket)
 int socket_wait(SOCKET *sockets, unsigned count, int delay)
 {
 #ifdef SOCKET_USE_POLL
-        struct pollfd fds[count];
-        for (unsigned i = 0; i < count; i++) {
-            fds[i] = (struct pollfd){.fd = sockets[i], .events = POLLIN};
-        }
-        int rc = poll(fds, count, delay);
-        if (rc == -1) perror("poll");
-        return rc;
+    struct pollfd fds[count];
+    for (unsigned i = 0; i < count; i++) {
+        fds[i] = (struct pollfd){.fd = sockets[i], .events = POLLIN};
+    }
+    int rc = poll(fds, count, delay);
+    if (rc == -1) perror("poll");
+    return rc;
 #else
-        SOCKET maxfd = 0;
-        fd_set rfds;
-        FD_ZERO(&rfds);
-        for (unsigned i = 0; i < count; i++) {
-            maxfd = max(sockets[i], maxfd);
-            FD_SET(sockets[i], &rfds);
-        }
+    SOCKET maxfd = 0;
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    for (unsigned i = 0; i < count; i++) {
+        maxfd = max(sockets[i], maxfd);
+        FD_SET(sockets[i], &rfds);
+    }
 
-        struct timeval tv = {
-            .tv_sec = delay / 1000,
-            .tv_usec = (delay % 1000) * 1000
-        };
-        int rc = select((int)maxfd + 1, &rfds, NULL, NULL, &tv);
-        if (rc == -1) perror("select");
-        return rc;
+    struct timeval tv = {
+        .tv_sec = delay / 1000,
+        .tv_usec = (delay % 1000) * 1000
+    };
+    int rc = select((int)maxfd + 1, &rfds, NULL, NULL, &tv);
+    if (rc == -1) perror("select");
+    return rc;
 #endif
 }
 
@@ -182,7 +182,7 @@ SOCKET socket_connect(const char *host, const char *port)
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP
     };
-    struct addrinfo* result;
+    struct addrinfo *result;
     int gai_errno = getaddrinfo(host, port, &hints, &result);
     if (gai_errno) {
 #if defined(__unix__)
@@ -196,7 +196,7 @@ SOCKET socket_connect(const char *host, const char *port)
 
     SOCKET sock = -1;
     int error = 0;
-    struct addrinfo* info;
+    struct addrinfo *info;
     for (info = result; info; info = info->ai_next) {
         errno = 0;
         sock = socket(info->ai_family, info->ai_socktype, info->ai_protocol);

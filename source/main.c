@@ -179,27 +179,27 @@ static enum mobile_action filter_actions(enum mobile_action actions)
 
 static bool mobile_handle_loop(struct mobile_user *mobile)
 {
-	// Reset the adapter if requested
-	if (mobile->reset) {
-		mobile_stop(mobile->adapter);
-		mobile_start(mobile->adapter);
-		mobile->reset = false;
-	}
+    // Reset the adapter if requested
+    if (mobile->reset) {
+        mobile_stop(mobile->adapter);
+        mobile_start(mobile->adapter);
+        mobile->reset = false;
+    }
 
-	// Fetch action if none exists
-	if (mobile->action == MOBILE_ACTION_NONE) {
-		mobile->action =
-			filter_actions(mobile_actions_get(mobile->adapter));
-	}
+    // Fetch action if none exists
+    if (mobile->action == MOBILE_ACTION_NONE) {
+        mobile->action =
+            filter_actions(mobile_actions_get(mobile->adapter));
+    }
 
-	// Process action
-	if (mobile->action != MOBILE_ACTION_NONE) {
-		mobile_actions_process(mobile->adapter, mobile->action);
+    // Process action
+    if (mobile->action != MOBILE_ACTION_NONE) {
+        mobile_actions_process(mobile->adapter, mobile->action);
 
-		// Fetch next action
-		mobile->action =
-			filter_actions(mobile_actions_get(mobile->adapter));
-	}
+        // Fetch next action
+        mobile->action =
+            filter_actions(mobile_actions_get(mobile->adapter));
+    }
     return true;
 }
 
@@ -506,7 +506,7 @@ int main(int argc, char *argv[])
         goto error;
     }
     if (setsockopt(bgb_sock, IPPROTO_TCP, TCP_NODELAY,
-                (void *)&(int){1}, sizeof(int)) == -1) {
+            (void *)&(int){1}, sizeof(int)) == -1) {
         socket_perror("setsockopt");
         goto error;
     }
@@ -559,7 +559,7 @@ int main(int argc, char *argv[])
     }
     signal_int_trig = true;
 
-   // Wait for the mobile thread to finish
+    // Wait for the mobile thread to finish
     mobile_stop(mobile->adapter);
 
     // Close all sockets

@@ -39,7 +39,7 @@ static struct sockaddr *convert_sockaddr(socklen_t *addrlen, union u_sockaddr *u
         u_addr->addr4.sin_port = htons(addr4->port);
         if (sizeof(struct in_addr) != sizeof(addr4->host)) return NULL;
         memcpy(&u_addr->addr4.sin_addr.s_addr, addr4->host,
-                sizeof(struct in_addr));
+            sizeof(struct in_addr));
         *addrlen = sizeof(struct sockaddr_in);
         return &u_addr->addr;
     } else if (addr->type == MOBILE_ADDRTYPE_IPV6) {
@@ -49,7 +49,7 @@ static struct sockaddr *convert_sockaddr(socklen_t *addrlen, union u_sockaddr *u
         u_addr->addr6.sin6_port = htons(addr6->port);
         if (sizeof(struct in6_addr) != sizeof(addr6->host)) return NULL;
         memcpy(&u_addr->addr6.sin6_addr.s6_addr, addr6->host,
-                sizeof(struct in6_addr));
+            sizeof(struct in6_addr));
         *addrlen = sizeof(struct sockaddr_in6);
         return &u_addr->addr;
     } else {
@@ -149,8 +149,9 @@ int socket_impl_connect(struct socket_impl *state, unsigned conn, const struct m
 
     // If the connection is in progress, block at most 100ms to see if it's
     //   enough for it to connect.
-    if (err == SOCKET_EWOULDBLOCK || err == SOCKET_EINPROGRESS
-            || err == SOCKET_EALREADY) {
+    if (err == SOCKET_EWOULDBLOCK ||
+            err == SOCKET_EINPROGRESS ||
+            err == SOCKET_EALREADY) {
         int rc = socket_isconnected(sock);
         if (rc > 0) return 1;
         if (rc == 0) return 0;
