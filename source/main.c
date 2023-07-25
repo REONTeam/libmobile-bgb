@@ -500,13 +500,13 @@ int main(int argc, char *argv[])
 
     // Connect to the emulator
     SOCKET bgb_sock = socket_connect(host, port);
-    if (bgb_sock == -1) {
+    if (bgb_sock == INVALID_SOCKET) {
         fprintf(stderr, "Could not connect (%s:%s): ", host, port);
         socket_perror(NULL);
         goto error;
     }
     if (setsockopt(bgb_sock, IPPROTO_TCP, TCP_NODELAY,
-            (void *)&(int){1}, sizeof(int)) == -1) {
+            (void *)&(int){1}, sizeof(int)) == SOCKET_ERROR) {
         socket_perror("setsockopt");
         goto error;
     }
@@ -552,7 +552,7 @@ int main(int argc, char *argv[])
         sockets[socket_count++] = bgb_sock;
         for (unsigned i = 0; i < MOBILE_MAX_CONNECTIONS; i++) {
             SOCKET fd = mobile->socket.sockets[i];
-            if (fd == -1) continue;
+            if (fd == INVALID_SOCKET) continue;
             sockets[socket_count++] = fd;
         }
         socket_wait(sockets, socket_count, 100);

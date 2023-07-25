@@ -77,7 +77,7 @@ int socket_hasdata(SOCKET socket)
         .events = POLLIN | POLLPRI,
     };
     int rc = poll(&fd, 1, 0);
-    if (rc == -1) perror("poll");
+    if (rc == -1) socket_perror("poll");
     return rc;
 #else
     fd_set rfds, exfds;
@@ -87,7 +87,7 @@ int socket_hasdata(SOCKET socket)
     FD_SET(socket, &exfds);
     struct timeval tv = {0};
     int rc = select((int)socket + 1, &rfds, NULL, &exfds, &tv);
-    if (rc == -1) perror("select");
+    if (rc == -1) socket_perror("select");
     return rc;
 #endif
 }
@@ -101,7 +101,7 @@ int socket_isconnected(SOCKET socket)
         .events = POLLOUT,
     };
     int rc = poll(&fd, 1, 0);
-    if (rc == -1) perror("poll");
+    if (rc == -1) socket_perror("poll");
     if (rc <= 0) return rc;
 #else
     fd_set wfds;
@@ -109,7 +109,7 @@ int socket_isconnected(SOCKET socket)
     FD_SET(socket, &wfds);
     struct timeval tv = {0};
     int rc = select((int)socket + 1, NULL, &wfds, NULL, &tv);
-    if (rc == -1) perror("select");
+    if (rc == -1) socket_perror("select");
     if (rc <= 0) return rc;
 #endif
 
@@ -131,7 +131,7 @@ int socket_wait(SOCKET *sockets, unsigned count, int delay)
         fds[i] = (struct pollfd){.fd = sockets[i], .events = POLLIN};
     }
     int rc = poll(fds, count, delay);
-    if (rc == -1) perror("poll");
+    if (rc == -1) socket_perror("poll");
     return rc;
 #else
     SOCKET maxfd = 0;
@@ -147,7 +147,7 @@ int socket_wait(SOCKET *sockets, unsigned count, int delay)
         .tv_usec = (delay % 1000) * 1000
     };
     int rc = select((int)maxfd + 1, &rfds, NULL, NULL, &tv);
-    if (rc == -1) perror("select");
+    if (rc == -1) socket_perror("select");
     return rc;
 #endif
 }
@@ -169,7 +169,7 @@ int socket_setblocking(SOCKET socket, int flag)
     }
 #elif defined(_WIN32)
     u_long mode = !flag;
-    if (ioctlsocket(socket, FIONBIO, &mode) != NO_ERROR) return -1;
+    if (ioctlsocket(socket, FIONBIO, &mode) == SOCKET_ERROR) return -1;
 #endif
     return 0;
 }
@@ -191,16 +191,16 @@ SOCKET socket_connect(const char *host, const char *port)
         fprintf(stderr, "getaddrinfo: Error %d: ", gai_errno);
         socket_perror(NULL);
 #endif
-        return -1;
+        return INVALID_SOCKET;
     }
 
-    SOCKET sock = -1;
+    SOCKET sock = INVALID_SOCKET;
     int error = 0;
     struct addrinfo *info;
     for (info = result; info; info = info->ai_next) {
         errno = 0;
         sock = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
-        if (sock == -1) {
+        if (sock == INVALID_SOCKET) {
             socket_perror("socket");
             continue;
         }
@@ -210,6 +210,6 @@ SOCKET socket_connect(const char *host, const char *port)
     }
     freeaddrinfo(result);
     socket_seterror(error);
-    if (!info) return -1;
+    if (!info) return INVALID_SOCKET;
     return sock;
 }

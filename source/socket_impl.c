@@ -16,14 +16,16 @@ union u_sockaddr {
 void socket_impl_init(struct socket_impl *state)
 {
     for (unsigned i = 0; i < MOBILE_MAX_CONNECTIONS; i++) {
-        state->sockets[i] = -1;
+        state->sockets[i] = INVALID_SOCKET;
     }
 }
 
 void socket_impl_stop(struct socket_impl *state)
 {
     for (unsigned i = 0; i < MOBILE_MAX_CONNECTIONS; i++) {
-        if (state->sockets[i] != -1) socket_close(state->sockets[i]);
+        if (state->sockets[i] != INVALID_SOCKET) {
+            socket_close(state->sockets[i]);
+        }
     }
 }
 
@@ -60,7 +62,7 @@ static struct sockaddr *convert_sockaddr(socklen_t *addrlen, union u_sockaddr *u
 
 bool socket_impl_open(struct socket_impl *state, unsigned conn, enum mobile_socktype type, enum mobile_addrtype addrtype, unsigned bindport)
 {
-    assert(state->sockets[conn] == -1);
+    assert(state->sockets[conn] == INVALID_SOCKET);
 
     int sock_type;
     switch (type) {
@@ -77,7 +79,7 @@ bool socket_impl_open(struct socket_impl *state, unsigned conn, enum mobile_sock
     }
 
     SOCKET sock = socket(sock_addrtype, sock_type, 0);
-    if (sock == -1) {
+    if (sock == INVALID_SOCKET) {
         socket_perror("socket");
         return false;
     }
@@ -88,7 +90,7 @@ bool socket_impl_open(struct socket_impl *state, unsigned conn, enum mobile_sock
 
     // Set SO_REUSEADDR so that we can bind to the same port again after
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
-            (char *)&(int){1}, sizeof(int)) == -1) {
+            (char *)&(int){1}, sizeof(int)) == SOCKET_ERROR) {
         socket_perror("setsockopt");
         socket_close(sock);
         return false;
@@ -97,7 +99,7 @@ bool socket_impl_open(struct socket_impl *state, unsigned conn, enum mobile_sock
     // Set TCP_NODELAY to aid sending packets inmediately, reducing latency
     if (type == MOBILE_SOCKTYPE_TCP &&
             setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
-                (char *)&(int){1}, sizeof(int)) == -1) {
+                (char *)&(int){1}, sizeof(int)) == SOCKET_ERROR) {
         socket_perror("setsockopt");
         socket_close(sock);
         return false;
@@ -117,7 +119,7 @@ bool socket_impl_open(struct socket_impl *state, unsigned conn, enum mobile_sock
         };
         rc = bind(sock, (struct sockaddr *)&addr, sizeof(addr));
     }
-    if (rc == -1) {
+    if (rc == SOCKET_ERROR) {
         socket_perror("bind");
         socket_close(sock);
         return false;
@@ -129,22 +131,22 @@ bool socket_impl_open(struct socket_impl *state, unsigned conn, enum mobile_sock
 
 void socket_impl_close(struct socket_impl *state, unsigned conn)
 {
-    assert(state->sockets[conn] != -1);
+    assert(state->sockets[conn] != INVALID_SOCKET);
     socket_close(state->sockets[conn]);
-    state->sockets[conn] = -1;
+    state->sockets[conn] = INVALID_SOCKET;
 }
 
 int socket_impl_connect(struct socket_impl *state, unsigned conn, const struct mobile_addr *addr)
 {
     SOCKET sock = state->sockets[conn];
-    assert(sock != -1);
+    assert(sock != INVALID_SOCKET);
 
     union u_sockaddr u_addr;
     socklen_t sock_addrlen;
     struct sockaddr *sock_addr = convert_sockaddr(&sock_addrlen, &u_addr, addr);
 
     // Try to connect/check if we're connected
-    if (connect(sock, sock_addr, sock_addrlen) != -1) return 1;
+    if (connect(sock, sock_addr, sock_addrlen) != SOCKET_ERROR) return 1;
     int err = socket_geterror();
 
     // If the connection is in progress, block at most 100ms to see if it's
@@ -172,9 +174,9 @@ int socket_impl_connect(struct socket_impl *state, unsigned conn, const struct m
 bool socket_impl_listen(struct socket_impl *state, unsigned conn)
 {
     SOCKET sock = state->sockets[conn];
-    assert(sock != -1);
+    assert(sock != INVALID_SOCKET);
 
-    if (listen(sock, 1) == -1) {
+    if (listen(sock, 1) == SOCKET_ERROR) {
         socket_perror("listen");
         return false;
     }
@@ -185,11 +187,11 @@ bool socket_impl_listen(struct socket_impl *state, unsigned conn)
 bool socket_impl_accept(struct socket_impl *state, unsigned conn)
 {
     SOCKET sock = state->sockets[conn];
-    assert(sock != -1);
+    assert(sock != INVALID_SOCKET);
 
     if (socket_hasdata(sock) <= 0) return false;
     SOCKET newsock = accept(sock, NULL, NULL);
-    if (newsock == -1) {
+    if (newsock == INVALID_SOCKET) {
         socket_perror("accept");
         return false;
     }
@@ -203,14 +205,14 @@ bool socket_impl_accept(struct socket_impl *state, unsigned conn)
 int socket_impl_send(struct socket_impl *state, unsigned conn, const void *data, const unsigned size, const struct mobile_addr *addr)
 {
     SOCKET sock = state->sockets[conn];
-    assert(sock != -1);
+    assert(sock != INVALID_SOCKET);
 
     union u_sockaddr u_addr;
     socklen_t sock_addrlen;
     struct sockaddr *sock_addr = convert_sockaddr(&sock_addrlen, &u_addr, addr);
 
     ssize_t len = sendto(sock, data, size, 0, sock_addr, sock_addrlen);
-    if (len == -1) {
+    if (len == SOCKET_ERROR) {
         // If the socket is blocking, we just haven't sent anything
         int err = socket_geterror();
         if (err == SOCKET_EWOULDBLOCK) return 0;
@@ -224,7 +226,7 @@ int socket_impl_send(struct socket_impl *state, unsigned conn, const void *data,
 int socket_impl_recv(struct socket_impl *state, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
 {
     SOCKET sock = state->sockets[conn];
-    assert(sock != -1);
+    assert(sock != INVALID_SOCKET);
 
     // Make sure at least one byte is in the buffer
     if (socket_hasdata(sock) <= 0) return 0;
@@ -242,7 +244,7 @@ int socket_impl_recv(struct socket_impl *state, unsigned conn, void *data, unsig
         char c;
         len = recvfrom(sock, &c, 1, MSG_PEEK, sock_addr, &sock_addrlen);
     }
-    if (len == -1) {
+    if (len == SOCKET_ERROR) {
         // If the socket is blocking, we just haven't received anything
         // Though this shouldn't happen thanks to the socket_hasdata check.
         int err = socket_geterror();
@@ -259,7 +261,7 @@ int socket_impl_recv(struct socket_impl *state, unsigned conn, void *data, unsig
         int sock_type = 0;
         socklen_t sock_type_len = sizeof(sock_type);
         if (getsockopt(sock, SOL_SOCKET, SO_TYPE, (char *)&sock_type,
-                &sock_type_len) == -1) {
+                &sock_type_len) == SOCKET_ERROR) {
             socket_perror("getsockopt");
             return -1;
         }

@@ -22,8 +22,10 @@
 #define SOCKET_EWOULDBLOCK EWOULDBLOCK
 #define SOCKET_EINPROGRESS EINPROGRESS
 #define SOCKET_EALREADY EALREADY
-#define SOCKET_USE_POLL
+#define SOCKET_ERROR (-1)
 typedef int SOCKET;
+#define INVALID_SOCKET (-1)
+#define SOCKET_USE_POLL
 #elif defined(_WIN32)
 #define socket_close closesocket
 #define socket_geterror() WSAGetLastError()
