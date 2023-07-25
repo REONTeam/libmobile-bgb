@@ -4,9 +4,9 @@
 /config_test.bin
 /config_test_p2.bin
 
-/releng/src
-/releng/lib
-/releng/out
+/releng/src/
+/releng/lib/
+/releng/out/
 
 # Autotools artifacts
 /Makefile.in
