@@ -146,18 +146,22 @@ int socket_impl_connect(struct socket_impl *state, unsigned conn, const struct m
     struct sockaddr *sock_addr = convert_sockaddr(&sock_addrlen, &u_addr, addr);
 
     // Try to connect/check if we're connected
-    if (connect(sock, sock_addr, sock_addrlen) != SOCKET_ERROR) return 1;
+    int rc = connect(sock, sock_addr, sock_addrlen);
     int err = socket_geterror();
+    if (rc != SOCKET_ERROR) return 1;
 
     // If the connection is in progress, block at most 100ms to see if it's
     //   enough for it to connect.
+    // On windows, connect() returns EISCONN rather than no error, but we
+    //   double-check it anyway.
     if (err == SOCKET_EWOULDBLOCK ||
             err == SOCKET_EINPROGRESS ||
-            err == SOCKET_EALREADY) {
-        int rc = socket_isconnected(sock);
+            err == SOCKET_EALREADY ||
+            err == SOCKET_EISCONN) {
+        rc = socket_isconnected(sock);
+        err = socket_geterror();
         if (rc > 0) return 1;
         if (rc == 0) return 0;
-        err = socket_geterror();
     }
 
     char sock_str[SOCKET_STRADDR_MAXLEN] = {0};
