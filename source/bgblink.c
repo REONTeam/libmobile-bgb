@@ -157,6 +157,10 @@ bool bgb_loop(struct bgb_state *state)
         // Ignore, we've already sent a status packet
         break;
 
+    case BGB_CMD_WANTDISCONNECT:
+        // Ignore, the server is gonna disconnect for us anyway
+        break;
+
     default:
         fprintf(stderr, "bgb_loop: Unknown command: %d (%02X %02X %02X) @ %d\n",
             packet.cmd, packet.b2, packet.b3, packet.b4, packet.timestamp);
