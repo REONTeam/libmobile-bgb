@@ -26,7 +26,7 @@ class BGBMaster:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((host, port))
         if not os.getenv("TEST_CFG_NOEXE"):
-            sock.settimeout(1)
+            sock.settimeout(2)
         sock.listen(1)
         self.sock = sock
         self.conn = None
@@ -915,7 +915,7 @@ class Tests(unittest.TestCase):
                 m.cmd_tel("bagina :DD")
             self.assertEqual(e.exception.code, 3)
         with self.assertRaises(MobileCmdError) as e:
-            m.cmd_tel("bagina :DD")
+            m.cmd_tel("bagina :DDD")
         self.assertEqual(e.exception.code, 3)
         m.cmd_end()
 
@@ -926,7 +926,7 @@ class Tests(unittest.TestCase):
         for x in range(3):
             m.cmd_start()
             with self.assertRaises(MobileCmdError) as e:
-                m.cmd_tel("bagina :DDD")
+                m.cmd_tel("bagina :DDDD")
             self.assertEqual(e.exception.code, 3)
             m.bus.add_time(5)
             time.sleep(0.1)

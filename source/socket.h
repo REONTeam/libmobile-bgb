@@ -33,11 +33,13 @@ typedef int SOCKET;
 #define SOCKET_EWOULDBLOCK WSAEWOULDBLOCK
 #define SOCKET_EINPROGRESS WSAEINPROGRESS
 #define SOCKET_EALREADY WSAEALREADY
-typedef int ssize_t;
 #endif
 
+// ipv6 addr + colon + 5 char port + terminator
+#define SOCKET_STRADDR_MAXLEN (INET6_ADDRSTRLEN + 7)
+
 void socket_perror(const char *func);
-int socket_straddr(char *res, unsigned res_len, char *res_port, struct sockaddr *addr, socklen_t addrlen);
+int socket_straddr(char *res, unsigned res_len, struct sockaddr *addr, socklen_t addrlen);
 int socket_hasdata(SOCKET socket);
 int socket_isconnected(SOCKET socket);
 int socket_wait(SOCKET *sockets, unsigned count, int delay);

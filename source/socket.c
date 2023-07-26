@@ -37,8 +37,11 @@ void socket_perror(const char *func)
 }
 
 // Convert a sockaddr to a printable string
-int socket_straddr(char *res, unsigned res_len, char *res_port, struct sockaddr *addr, socklen_t addrlen)
+int socket_straddr(char *res, unsigned res_len, struct sockaddr *addr, socklen_t addrlen)
 {
+#if defined(__unix__)
+    (void)addrlen;
+
     void *inaddr;
     unsigned inport;
     if (addr->sa_family == AF_INET) {
@@ -53,18 +56,17 @@ int socket_straddr(char *res, unsigned res_len, char *res_port, struct sockaddr 
         return -1;
     }
 
-#if defined(__unix__)
-    (void)addrlen;
     if (!inet_ntop(addr->sa_family, inaddr, res, res_len)) return -1;
+    size_t pos = strlen(res);
+    snprintf(res + pos, res_len - pos, ":%u", inport);
 #elif defined(_WIN32)
-    (void)inaddr;
     DWORD res_len_r = res_len;
     if (WSAAddressToStringA(addr, addrlen, NULL, res, &res_len_r)
             == SOCKET_ERROR) {
+        // Errors when the buffer isn't large enough as well
         return -1;
     }
 #endif
-    sprintf(res_port, "%u", inport);
     return 0;
 }
 

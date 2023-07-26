@@ -160,13 +160,10 @@ int socket_impl_connect(struct socket_impl *state, unsigned conn, const struct m
         err = socket_geterror();
     }
 
-    char sock_host[INET6_ADDRSTRLEN] = {0};
-    char sock_port[6] = {0};
-    socket_straddr(sock_host, sizeof(sock_host), sock_port, sock_addr,
-        sock_addrlen);
+    char sock_str[SOCKET_STRADDR_MAXLEN] = {0};
+    socket_straddr(sock_str, sizeof(sock_str), sock_addr, sock_addrlen);
     socket_seterror(err);
-    fprintf(stderr, "Could not connect (ip %s port %s): ",
-        sock_host, sock_port);
+    fprintf(stderr, "Could not connect (%s): ", sock_str);
     socket_perror(NULL);
     return -1;
 }
