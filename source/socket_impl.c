@@ -246,7 +246,7 @@ int socket_impl_recv(struct socket_impl *state, unsigned conn, void *data, unsig
         len = recvfrom(sock, &c, 1, MSG_PEEK, sock_addr, &sock_addrlen);
     }
     if (len == SOCKET_ERROR) {
-        // If the socket is blocking, we just haven't received anything
+        // If the socket is nonblocking, we just haven't received anything.
         // Though this shouldn't happen thanks to the socket_hasdata check.
         int err = socket_geterror();
         if (err == SOCKET_EWOULDBLOCK) return 0;

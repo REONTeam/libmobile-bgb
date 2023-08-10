@@ -74,10 +74,7 @@ int socket_straddr(char *res, unsigned res_len, struct sockaddr *addr, socklen_t
 int socket_hasdata(SOCKET socket)
 {
 #ifdef SOCKET_USE_POLL
-    struct pollfd fd = {
-        .fd = socket,
-        .events = POLLIN | POLLPRI,
-    };
+    struct pollfd fd = {.fd = socket, .events = POLLIN | POLLPRI};
     int rc = poll(&fd, 1, 0);
     if (rc == -1) socket_perror("poll");
     return rc;
@@ -98,10 +95,7 @@ int socket_hasdata(SOCKET socket)
 int socket_isconnected(SOCKET socket)
 {
 #ifdef SOCKET_USE_POLL
-    struct pollfd fd = {
-        .fd = socket,
-        .events = POLLOUT,
-    };
+    struct pollfd fd = {.fd = socket, .events = POLLOUT};
     int rc = poll(&fd, 1, 0);
     if (rc == -1) socket_perror("poll");
     if (rc <= 0) return rc;
