@@ -35,27 +35,27 @@ static void impl_debug_log(void *user, const char *line)
 
 static bool impl_config_read(void *user, void *dest, const uintptr_t offset, const size_t size)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     fseek(mobile->config, (long)offset, SEEK_SET);
     return fread(dest, 1, size, mobile->config) == size;
 }
 
 static bool impl_config_write(void *user, const void *src, const uintptr_t offset, const size_t size)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     fseek(mobile->config, (long)offset, SEEK_SET);
     return fwrite(src, 1, size, mobile->config) == size;
 }
 
 static void impl_time_latch(void *user, unsigned timer)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     mobile->bgb_clock_latch[timer] = mobile->bgb_clock;
 }
 
 static bool impl_time_check_ms(void *user, unsigned timer, unsigned ms)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     return
         ((mobile->bgb_clock - mobile->bgb_clock_latch[timer]) & 0x7FFFFFFF) >=
         (uint32_t)((double)ms * (1 << 21) / 1000);
@@ -63,43 +63,43 @@ static bool impl_time_check_ms(void *user, unsigned timer, unsigned ms)
 
 static bool impl_sock_open(void *user, unsigned conn, enum mobile_socktype type, enum mobile_addrtype addrtype, unsigned bindport)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     return socket_impl_open(&mobile->socket, conn, type, addrtype, bindport);
 }
 
 static void impl_sock_close(void *user, unsigned conn)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     socket_impl_close(&mobile->socket, conn);
 }
 
 static int impl_sock_connect(void *user, unsigned conn, const struct mobile_addr *addr)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     return socket_impl_connect(&mobile->socket, conn, addr);
 }
 
 static bool impl_sock_listen(void *user, unsigned conn)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     return socket_impl_listen(&mobile->socket, conn);
 }
 
 static bool impl_sock_accept(void *user, unsigned conn)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     return socket_impl_accept(&mobile->socket, conn);
 }
 
 static int impl_sock_send(void *user, unsigned conn, const void *data, unsigned size, const struct mobile_addr *addr)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     return socket_impl_send(&mobile->socket, conn, data, size, addr);
 }
 
 static int impl_sock_recv(void *user, unsigned conn, void *data, unsigned size, struct mobile_addr *addr)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     return socket_impl_recv(&mobile->socket, conn, data, size, addr);
 }
 
@@ -134,7 +134,7 @@ static void update_title(struct mobile_user *mobile)
 
 static void impl_update_number(void *user, enum mobile_number type, const char *number)
 {
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
 
     char *dest = NULL;
     switch (type) {
@@ -206,7 +206,7 @@ static bool mobile_handle_loop(struct mobile_user *mobile)
 static unsigned char bgb_loop_transfer(void *user, unsigned char c)
 {
     // Transfer a byte over the serial port
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     c = mobile_transfer(mobile->adapter, c);
     return c;
 }
@@ -214,7 +214,7 @@ static unsigned char bgb_loop_transfer(void *user, unsigned char c)
 static void bgb_loop_timestamp(void *user, uint32_t t)
 {
     // Update the timestamp sent by the emulator
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
 
     // Bail if the time difference is too big. This happens whenever the
     //   emulator is reset, a new game is loaded, or a save state is loaded.
@@ -230,7 +230,7 @@ static void bgb_loop_timestamp(void *user, uint32_t t)
 static void bgb_loop_timestamp_init(void *user, uint32_t t)
 {
     // Initialize the clock
-    struct mobile_user *mobile = (struct mobile_user *)user;
+    struct mobile_user *mobile = user;
     mobile->bgb_clock = t;
     mobile->bgb_clock_init = true;
 }
