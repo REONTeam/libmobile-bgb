@@ -150,19 +150,14 @@ int socket_impl_connect(struct socket_impl *state, unsigned conn, const struct m
     int err = socket_geterror();
     if (rc != SOCKET_ERROR) return 1;
 
-    // If the connection is in progress, block at most 100ms to see if it's
-    //   enough for it to connect.
-    // On windows, connect() returns EISCONN rather than no error, but we
-    //   double-check it anyway.
+    // If the connection is in progress, try again in a bit.
+    // On windows, connect() returns EISCONN rather than no error.
     if (err == SOCKET_EWOULDBLOCK ||
             err == SOCKET_EINPROGRESS ||
-            err == SOCKET_EALREADY ||
-            err == SOCKET_EISCONN) {
-        rc = socket_isconnected(sock);
-        err = socket_geterror();
-        if (rc > 0) return 1;
-        if (rc == 0) return 0;
+            err == SOCKET_EALREADY) {
+        return 0;
     }
+    if (err == SOCKET_EISCONN) return 1;
 
     char sock_str[SOCKET_STRADDR_MAXLEN] = {0};
     socket_straddr(sock_str, sizeof(sock_str), sock_addr, sock_addrlen);

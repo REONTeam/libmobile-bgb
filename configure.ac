@@ -45,7 +45,7 @@ AC_ARG_WITH([system-libmobile], AS_HELP_STRING([--with-system-libmobile],
     [use a system-wide copy of libmobile]))
 found_libmobile=no
 AS_IF([test "$with_system_libmobile" != no], [dnl
-    PKG_CHECK_MODULES_STATIC([LIBMOBILE], [libmobile >= 0.2.0],
+    PKG_CHECK_MODULES([LIBMOBILE], [libmobile >= 0.2.0],
         [found_libmobile=yes], [:])])
 AS_IF([test "$with_system_libmobile" = yes -a "$found_libmobile" != yes], [dnl
     AC_MSG_FAILURE([libmobile not found])])

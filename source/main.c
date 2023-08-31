@@ -480,7 +480,8 @@ int main(int argc, char *argv[])
 
     mobile_config_load(mobile->adapter);
     mobile_config_set_device(mobile->adapter, device, device_unmetered);
-    mobile_config_set_dns(mobile->adapter, &dns1, &dns2);
+    mobile_config_set_dns(mobile->adapter, &dns1, MOBILE_DNS1);
+    mobile_config_set_dns(mobile->adapter, &dns2, MOBILE_DNS2);
     mobile_config_set_p2p_port(mobile->adapter, p2p_port);
     mobile_config_set_relay(mobile->adapter, &relay);
     if (relay_token_update) {

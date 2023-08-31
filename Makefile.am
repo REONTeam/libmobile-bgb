@@ -19,6 +19,8 @@ mobile_CPPFLAGS += -I subprojects/libmobile -I $(srcdir)/subprojects/libmobile
 mobile_LDADD += subprojects/libmobile/libmobile.la
 endif
 
+DIST_SUBDIRS = $(SUBDIRS)
+
 bin_PROGRAMS = mobile
 
 mobile_SOURCES = \
