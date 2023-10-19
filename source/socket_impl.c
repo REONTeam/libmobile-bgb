@@ -243,9 +243,7 @@ int socket_impl_recv(struct socket_impl *state, unsigned conn, void *data, unsig
     if (len == SOCKET_ERROR) {
         // If the socket is nonblocking, we just haven't received anything.
         // Though this shouldn't happen thanks to the socket_hasdata check.
-        int err = socket_geterror();
-        if (err == SOCKET_EWOULDBLOCK) return 0;
-
+        if (socket_geterror() == SOCKET_EWOULDBLOCK) return 0;
         socket_perror("recv");
         return -1;
     }

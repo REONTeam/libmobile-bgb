@@ -24,8 +24,8 @@
 #define SOCKET_EALREADY EALREADY
 #define SOCKET_EISCONN EISCONN
 #define SOCKET_ERROR (-1)
-typedef int SOCKET;
 #define INVALID_SOCKET (-1)
+typedef int SOCKET;
 #define SOCKET_USE_POLL
 #elif defined(_WIN32)
 #define socket_close closesocket
