@@ -20,6 +20,7 @@ mobile_LDADD += subprojects/libmobile/libmobile.la
 endif
 
 DIST_SUBDIRS = $(SUBDIRS)
+AM_DISTCHECK_CONFIGURE_FLAGS = --without-system-libmobile
 
 bin_PROGRAMS = mobile
 
