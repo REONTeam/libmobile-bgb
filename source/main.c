@@ -488,7 +488,7 @@ int main(int argc, char *argv[])
     mobile_config_set_dns(mobile->adapter, &dns2, MOBILE_DNS2);
     mobile_config_set_p2p_port(mobile->adapter, p2p_port);
     mobile_config_set_relay(mobile->adapter, &relay);
-    mobile_config_alt_mail(mobile->adapter, change_mail_port);
+    mobile_config_set_alt_mail(mobile->adapter, change_mail_port);
 
     if (relay_token_update) {
         mobile_config_set_relay_token(mobile->adapter, relay_token);
