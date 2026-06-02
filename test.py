@@ -10,6 +10,7 @@ import multiprocessing
 import threading
 import select
 import unittest
+import atexit
 
 
 class BGBMaster:
@@ -497,7 +498,7 @@ class SimpleTCPServer:
 
 
 class SimpleDNSServer:
-    def __init__(self, host="127.0.0.1", port=5353):
+    def __init__(self, host="127.0.0.1", port=8753):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((host, port))
         self.sock = sock
@@ -815,9 +816,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(m.cmd_data(0xFF), data)
 
         # Connection closed
-        with self.assertRaises(MobileCmdError) as e:
-            m.cmd_data(0xFF, b"\0")
-        self.assertEqual(e.exception.code, 0)
+        self.assertEqual(m.cmd_data(0xFF, b"\0"), b"")
+        self.assertEqual(m.cmd_data(0xFF), b"")
 
         m.cmd_offline()
         m.cmd_end()
@@ -843,9 +843,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(m.cmd_data(0xFF), data)
 
         # Connection closed
-        with self.assertRaises(MobileCmdError) as e:
-            m.cmd_data(0xFF, b"\0")
-        self.assertEqual(e.exception.code, 0)
+        self.assertEqual(m.cmd_data(0xFF, b"\0"), b"")
+        self.assertEqual(m.cmd_data(0xFF), b"")
 
         m.cmd_offline()
         m.cmd_end()
@@ -886,7 +885,7 @@ class Tests(unittest.TestCase):
             # Test auto cleanup by ending session without closing connections
             m.cmd_end()
 
-    @mobile_process_test("--dns2", "127.0.0.1", "--dns_port", "5353")
+    @mobile_process_test("--dns2", "127.0.0.1", "--dns_port", "8753")
     def test_dns_query(self, m):
         m.cmd_start()
         m.cmd_tel("0755311973")
@@ -973,5 +972,14 @@ class Tests(unittest.TestCase):
             p2.close()
 
 
+def cleanup():
+    files = ["config_test.bin", "config_test_p2.bin"]
+    for file in files:
+        try:
+            os.remove(file)
+        except FileNotFoundError:
+            pass
+
 if __name__ == "__main__":
+    atexit.register(cleanup)
     unittest.main(buffer=not os.getenv("TEST_CFG_NOPIPE"), verbosity=2)
