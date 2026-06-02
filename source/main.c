@@ -259,6 +259,7 @@ static void show_help_full(void)
         "--p2p_port port     Port to use for relay-less P2P communications\n"
         "--relay addr        Set relay server for P2P communications\n"
         "--relay-token hex   Set relay token (or empty to clear)\n"
+        "--no-port-redir     Set the adapter to use port 25 during SMTP requests\n"
     );
     exit(EXIT_SUCCESS);
 }
@@ -341,6 +342,7 @@ int main(int argc, char *argv[])
     char *fname_config = "config.bin";
     enum mobile_adapter_device device = MOBILE_ADAPTER_BLUE;
     bool device_unmetered = false;
+    bool change_mail_port = true;
     struct mobile_addr dns1 = {0};
     struct mobile_addr dns2 = {0};
     unsigned dns_port = MOBILE_DNS_PORT;
@@ -414,6 +416,8 @@ int main(int argc, char *argv[])
                 show_help();
             }
             argv += 1;
+        } else if (strcmp(*argv, "--no-port-redir") == 0) {
+            change_mail_port = false;
         } else {
             fprintf(stderr, "Unknown option: %s\n", *argv);
             show_help();
@@ -484,6 +488,8 @@ int main(int argc, char *argv[])
     mobile_config_set_dns(mobile->adapter, &dns2, MOBILE_DNS2);
     mobile_config_set_p2p_port(mobile->adapter, p2p_port);
     mobile_config_set_relay(mobile->adapter, &relay);
+    mobile_config_set_alt_mail(mobile->adapter, change_mail_port);
+
     if (relay_token_update) {
         mobile_config_set_relay_token(mobile->adapter, relay_token);
     }
